@@ -1,0 +1,10 @@
+services:
+  postgres:
+    image: postgres:latest
+    container_name: registro-ponto-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: registro_ponto
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
