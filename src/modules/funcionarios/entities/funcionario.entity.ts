@@ -1,52 +1,45 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
+import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
 @Entity('funcionarios')
 export class Funcionario {
-  @ApiProperty({ example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479', description: 'ID único do funcionário' })
+  @ApiProperty()
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ApiProperty({ example: 'João Silva', description: 'Nome completo do funcionário' })
+  @ApiProperty()
   @Column({ length: 255 })
   nome: string;
 
-  @ApiProperty({ example: '123.456.789-10', description: 'CPF do funcionário' })
+  @ApiProperty()
   @Column({ length: 14, unique: true })
   cpf: string;
 
-  @ApiProperty({ example: 'joao.silva@empresa.com', description: 'Email do funcionário' })
+  @ApiProperty()
   @Column({ length: 255, unique: true })
   email: string;
 
-  @ApiProperty({ example: '(11) 99999-0001', description: 'Telefone do funcionário' })
+  @ApiProperty()
   @Column({ length: 20 })
   telefone: string;
 
-  @ApiProperty({ example: 'Desenvolvedor Frontend', description: 'Cargo do funcionário' })
+  @ApiProperty()
   @Column({ length: 100 })
   cargo: string;
 
-  @ApiProperty({ example: 'Tecnologia', description: 'Departamento do funcionário' })
+  @ApiProperty()
   @Column({ length: 100 })
   departamento: string;
 
-  @ApiProperty({ example: true, description: 'Status ativo do funcionário' })
+  @ApiProperty()
   @Column({ default: true })
   ativo: boolean;
 
-  @ApiProperty({ example: '2023-01-15', description: 'Data de admissão do funcionário' })
+  @ApiProperty()
   @Column({ type: 'date' })
   dataAdmissao: Date;
 
-  @ApiProperty({
-    example: {
-      entrada: '08:00',
-      saida: '17:00',
-      intervalos: [{ inicio: '12:00', fim: '13:00' }]
-    },
-    description: 'Horário de trabalho do funcionário'
-  })
+  @ApiProperty()
   @Column('json')
   horarioTrabalho: {
     entrada: string;
@@ -57,11 +50,11 @@ export class Funcionario {
     }[];
   };
 
-  @ApiProperty({ description: 'Data de criação do registro' })
+  @ApiProperty()
   @CreateDateColumn()
   createdAt: Date;
 
-  @ApiProperty({ description: 'Data da última atualização do registro' })
+  @ApiProperty()
   @UpdateDateColumn()
   updatedAt: Date;
 } 
