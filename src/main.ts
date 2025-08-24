@@ -20,7 +20,7 @@ async function bootstrap() {
 
   // Configuração do CORS
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
+    origin: ['http://localhost:3000', 'http://localhost:4000'],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
@@ -50,12 +50,12 @@ async function bootstrap() {
   });
 
   // Prefixo global para todas as rotas
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('v1');
 
-  const port = process.env.PORT ?? 3001;
+  const port = process.env.PORT ?? 4000;
   await app.listen(port);
-  
+
   console.log(`🚀 Aplicação rodando em: http://localhost:${port}`);
-  console.log(`📚 Documentação Swagger: http://localhost:${port}/api/docs`);
+  console.log(`📚 Documentação Swagger: http://localhost:${port}/v1/docs`);
 }
 bootstrap();
