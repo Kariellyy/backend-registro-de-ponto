@@ -18,9 +18,10 @@ export class CreateUsuarioDto {
   @IsEmail({}, { message: 'Email deve ser um endereço válido' })
   email: string;
 
+  @IsOptional()
   @IsString({ message: 'Senha deve ser uma string' })
   @MinLength(6, { message: 'Senha deve ter pelo menos 6 caracteres' })
-  password: string;
+  password?: string;
 
   @IsOptional()
   @IsString({ message: 'Telefone deve ser uma string' })

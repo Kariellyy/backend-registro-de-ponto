@@ -81,6 +81,11 @@ export class UsuariosController {
       throw new ForbiddenException('Não é possível excluir sua própria conta');
     }
 
-    return this.usuariosService.remove(id);
+    await this.usuariosService.remove(id);
+
+    return {
+      message: 'Funcionário excluído com sucesso',
+      deletedId: id,
+    };
   }
 }

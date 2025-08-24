@@ -46,8 +46,19 @@ export class UsuariosService {
       }
     }
 
+    // Determinar a senha: usar CPF se não for fornecida
+    let passwordToUse = createUsuarioDto.password;
+    if (!passwordToUse && createUsuarioDto.cpf) {
+      // Remover formatação do CPF para usar como senha
+      passwordToUse = createUsuarioDto.cpf.replace(/\D/g, '');
+    } else if (!passwordToUse) {
+      throw new BadRequestException(
+        'Senha é obrigatória ou CPF deve ser fornecido',
+      );
+    }
+
     // Hash da senha
-    const hashedPassword = await bcrypt.hash(createUsuarioDto.password, 10);
+    const hashedPassword = await bcrypt.hash(passwordToUse, 10);
 
     const usuario = this.usuarioRepository.create({
       ...createUsuarioDto,
