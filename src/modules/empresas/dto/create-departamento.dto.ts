@@ -10,3 +10,4 @@ export class CreateDepartamentoDto {
   @IsString({ message: 'Descrição deve ser uma string' })
   descricao?: string;
 }
+
