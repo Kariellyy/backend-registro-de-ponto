@@ -6,16 +6,18 @@ import { DatabaseModule } from './core/database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { EmpresasModule } from './modules/empresas/empresas.module';
 import { UsuariosModule } from './modules/usuarios/usuarios.module';
+import { PontoModule } from './modules/ponto/ponto.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    DatabaseModule, 
-    EmpresasModule, 
+    DatabaseModule,
+    EmpresasModule,
     UsuariosModule,
     AuthModule,
+    PontoModule,
   ],
   controllers: [],
   providers: [

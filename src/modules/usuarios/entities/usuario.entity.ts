@@ -1,9 +1,11 @@
+import { RegistroPonto } from 'src/modules/ponto/entities/registro-ponto.entity';
 import {
   Column,
   CreateDateColumn,
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -79,6 +81,9 @@ export class Usuario {
   })
   @JoinColumn({ name: 'departamento_id' })
   departamento: Departamento;
+
+  @OneToMany(() => RegistroPonto, (registro) => registro.usuario)
+  registrosPonto: RegistroPonto[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
