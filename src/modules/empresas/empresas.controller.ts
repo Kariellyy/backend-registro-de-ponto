@@ -2,19 +2,23 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { JwtPayload } from '../auth/interfaces/auth.interface';
 import { CreateEmpresaDto } from './dto/create-empresa.dto';
 import { UpdateEmpresaDto } from './dto/update-empresa.dto';
 import { EmpresasService } from './empresas.service';
 
 @Controller('empresas')
+@UseGuards(JwtAuthGuard)
 export class EmpresasController {
   constructor(private readonly empresasService: EmpresasService) {}
 
@@ -24,27 +28,42 @@ export class EmpresasController {
     return this.empresasService.create(createEmpresaDto);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Get()
-  findAll() {
-    return this.empresasService.findAll();
+  @Get('me')
+  findMyEmpresa(@CurrentUser() user: JwtPayload) {
+    return this.empresasService.findOne(user.empresaId);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  async findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    // Verificar se o usuário está tentando acessar sua própria empresa
+    if (id !== user.empresaId) {
+      throw new ForbiddenException('Acesso negado');
+    }
+
     return this.empresasService.findOne(id);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateEmpresaDto: UpdateEmpresaDto) {
+  async update(
+    @Param('id') id: string,
+    @Body() updateEmpresaDto: UpdateEmpresaDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    // Verificar se o usuário está tentando atualizar sua própria empresa
+    if (id !== user.empresaId) {
+      throw new ForbiddenException('Acesso negado');
+    }
+
     return this.empresasService.update(id, updateEmpresaDto);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    // Verificar se o usuário está tentando deletar sua própria empresa
+    if (id !== user.empresaId) {
+      throw new ForbiddenException('Acesso negado');
+    }
+
     return this.empresasService.remove(id);
   }
 }

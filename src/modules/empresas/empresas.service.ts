@@ -39,12 +39,6 @@ export class EmpresasService {
     return await this.empresaRepository.save(empresa);
   }
 
-  async findAll(): Promise<Empresa[]> {
-    return await this.empresaRepository.find({
-      relations: ['usuarios'],
-    });
-  }
-
   async findOne(id: string): Promise<Empresa> {
     const empresa = await this.empresaRepository.findOne({
       where: { id },
@@ -57,7 +51,10 @@ export class EmpresasService {
     return empresa;
   }
 
-  async update(id: string, updateEmpresaDto: UpdateEmpresaDto): Promise<Empresa> {
+  async update(
+    id: string,
+    updateEmpresaDto: UpdateEmpresaDto,
+  ): Promise<Empresa> {
     const empresa = await this.findOne(id);
 
     // Verificar se CNPJ já existe (se foi alterado)

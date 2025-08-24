@@ -1,10 +1,20 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import * as morgan from 'morgan';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Configuração do Morgan para logging
+  // Log apenas em desenvolvimento
+  if (process.env.NODE_ENV !== 'production') {
+    app.use(morgan('dev')); // Log colorido para desenvolvimento
+  } else {
+    // Log completo para produção
+    app.use(morgan('combined'));
+  }
 
   // Configuração global de validação
   app.useGlobalPipes(
@@ -57,5 +67,6 @@ async function bootstrap() {
 
   console.log(`🚀 Aplicação rodando em: http://localhost:${port}`);
   console.log(`📚 Documentação Swagger: http://localhost:${port}/v1/docs`);
+  console.log(`📝 Logs ativos - Morgan configurado`);
 }
 bootstrap();

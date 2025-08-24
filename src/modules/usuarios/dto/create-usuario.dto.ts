@@ -1,4 +1,12 @@
-import { IsEmail, IsEnum, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import {
+  IsDateString,
+  IsEmail,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MinLength,
+} from 'class-validator';
 import { UserRole } from '../../../core/enums/user-role.enum';
 import { UserStatus } from '../../../core/enums/user-status.enum';
 
@@ -22,6 +30,29 @@ export class CreateUsuarioDto {
   @IsString({ message: 'URL da foto deve ser uma string' })
   photoUrl?: string;
 
+  @IsOptional()
+  @IsString({ message: 'CPF deve ser uma string' })
+  cpf?: string;
+
+  @IsOptional()
+  @IsString({ message: 'Cargo deve ser uma string' })
+  cargo?: string;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'ID do departamento deve ser um UUID válido' })
+  departamentoId?: string;
+
+  @IsOptional()
+  @IsDateString({}, { message: 'Data de admissão deve ser uma data válida' })
+  dataAdmissao?: string;
+
+  @IsOptional()
+  horarioTrabalho?: {
+    entrada: string;
+    saida: string;
+    intervalos?: { inicio: string; fim: string }[];
+  };
+
   @IsEnum(UserRole, { message: 'Papel deve ser um valor válido' })
   papel: UserRole;
 
@@ -29,6 +60,7 @@ export class CreateUsuarioDto {
   @IsEnum(UserStatus, { message: 'Status deve ser um valor válido' })
   status?: UserStatus;
 
+  @IsOptional()
   @IsUUID('4', { message: 'ID da empresa deve ser um UUID válido' })
-  empresaId: string;
+  empresaId?: string;
 }

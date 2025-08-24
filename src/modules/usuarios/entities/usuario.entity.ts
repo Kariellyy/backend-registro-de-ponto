@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { UserRole } from '../../../core/enums/user-role.enum';
 import { UserStatus } from '../../../core/enums/user-status.enum';
+import { Departamento } from '../../empresas/entities/departamento.entity';
 import { Empresa } from '../../empresas/entities/empresa.entity';
 
 @Entity('usuarios')
@@ -30,6 +31,25 @@ export class Usuario {
 
   @Column({ type: 'varchar', length: 500, nullable: true })
   photoUrl: string;
+
+  @Column({ type: 'varchar', length: 14, nullable: true })
+  cpf: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  cargo: string;
+
+  @Column({ name: 'departamento_id', type: 'uuid', nullable: true })
+  departamentoId: string;
+
+  @Column({ type: 'date', nullable: true })
+  dataAdmissao: Date;
+
+  @Column({ type: 'json', nullable: true })
+  horarioTrabalho: {
+    entrada: string;
+    saida: string;
+    intervalos: { inicio: string; fim: string }[];
+  };
 
   @Column({
     type: 'enum',
@@ -53,6 +73,12 @@ export class Usuario {
   })
   @JoinColumn({ name: 'empresa_id' })
   empresa: Empresa;
+
+  @ManyToOne(() => Departamento, (departamento) => departamento.usuarios, {
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'departamento_id' })
+  departamento: Departamento;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

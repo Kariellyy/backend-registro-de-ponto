@@ -7,6 +7,7 @@ import {
   UpdateDateColumn
 } from "typeorm";
 import { Usuario } from "../../usuarios/entities/usuario.entity";
+import { Departamento } from "./departamento.entity";
 
 @Entity('empresas')
 export class Empresa {
@@ -30,6 +31,9 @@ export class Empresa {
 
     @OneToMany(() => Usuario, (usuario) => usuario.empresa)
     usuarios: Usuario[];
+
+    @OneToMany(() => Departamento, (departamento) => departamento.empresa)
+    departamentos: Departamento[];
 
     @CreateDateColumn({ name: 'created_at' })
     createdAt: Date;
