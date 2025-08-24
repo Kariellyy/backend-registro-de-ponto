@@ -76,14 +76,9 @@ export class PontoService {
     // Validar sequência de registros
     this.validarSequenciaRegistros(registrarPontoDto.tipo, registrosHoje);
 
-    // Validar geolocalização se fornecida
+    // Validar geolocalização
     let dentroDoRaio = true;
-    if (
-      registrarPontoDto.latitude &&
-      registrarPontoDto.longitude &&
-      empresa.latitude &&
-      empresa.longitude
-    ) {
+    if (empresa.latitude && empresa.longitude) {
       dentroDoRaio =
         this.calcularDistancia(
           registrarPontoDto.latitude,
@@ -93,6 +88,13 @@ export class PontoService {
         ) <= empresa.raioPermitido;
     }
 
+    // Verificar se empresa permite registro fora do raio
+    if (!dentroDoRaio && !empresa.permitirRegistroForaRaio) {
+      throw new BadRequestException(
+        'Registro de ponto não permitido fora do raio da empresa',
+      );
+    }
+
     // Criar registro
     const registro = this.registroPontoRepository.create({
       usuarioId,
@@ -100,11 +102,7 @@ export class PontoService {
       dataHora: new Date(),
       latitude: registrarPontoDto.latitude,
       longitude: registrarPontoDto.longitude,
-      endereco: registrarPontoDto.endereco,
-      precisao: registrarPontoDto.precisao,
       dentroDoRaio,
-      userAgent: registrarPontoDto.userAgent,
-      ipAddress: registrarPontoDto.ipAddress,
       observacoes: registrarPontoDto.observacoes,
       status: dentroDoRaio ? StatusRegistro.APROVADO : StatusRegistro.PENDENTE,
     });
@@ -164,48 +162,82 @@ export class PontoService {
     horasTrabalhadas: number;
     horasPrevistas: number;
     saldoTotal: number;
+    diasTrabalhados: number;
+    diasUteis: number;
+    horasSemanais: number;
+    semanasTrabalhadas: number;
   }> {
+    // Buscar usuário e empresa
+    const usuario = await this.usuarioRepository.findOne({
+      where: { id: usuarioId },
+      relations: ['empresa'],
+    });
+
+    if (!usuario) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+
     const dataInicio = new Date(ano, mes - 1, 1);
     const dataFim = new Date(ano, mes, 0, 23, 59, 59);
+
+    // Considerar data de admissão
+    let dataInicioCalculo = dataInicio;
+    if (usuario.dataAdmissao) {
+      const dataAdmissao = new Date(usuario.dataAdmissao);
+      if (dataAdmissao > dataInicio) {
+        dataInicioCalculo = dataAdmissao;
+      }
+    }
 
     const registros = await this.registroPontoRepository.find({
       where: {
         usuarioId,
-        dataHora: Between(dataInicio, dataFim),
+        dataHora: Between(dataInicioCalculo, dataFim),
         status: StatusRegistro.APROVADO,
       },
       order: { dataHora: 'ASC' },
     });
 
-    // Calcular horas trabalhadas
-    let horasTrabalhadas = 0;
-    let entrada: Date | null = null;
+    // Calcular horas trabalhadas considerando intervalos
+    const horasTrabalhadas = this.calcularHorasTrabalhadasPorDia(registros);
 
-    for (const registro of registros) {
-      if (registro.tipo === TipoRegistro.ENTRADA) {
-        entrada = registro.dataHora;
-      } else if (registro.tipo === TipoRegistro.SAIDA && entrada) {
-        const diffMs = registro.dataHora.getTime() - entrada.getTime();
-        horasTrabalhadas += diffMs / (1000 * 60 * 60); // Converter para horas
-        entrada = null;
-      }
-    }
+    // Calcular horas previstas baseadas na configuração do usuário/empresa
+    const horasPrevistas = this.calcularHorasPrevisasNovas(
+      dataInicioCalculo,
+      dataFim,
+      usuario,
+    );
 
-    // Calcular horas previstas (8 horas por dia útil)
-    const diasUteis = this.calcularDiasUteis(dataInicio, dataFim);
-    const horasPrevistas = diasUteis * 8;
+    // Calcular dias trabalhados e úteis
+    const diasTrabalhados = this.calcularDiasTrabalhados(registros);
+    const diasUteis = this.calcularDiasUteisDoUsuario(
+      dataInicioCalculo,
+      dataFim,
+      usuario,
+    );
+
+    // Calcular horas semanais
+    const semanasTrabalhadas = this.calcularSemanas(dataInicioCalculo, dataFim);
+    const horasSemanais = usuario.cargaHorariaSemanal || 40;
 
     // Calcular saldo do mês
     const saldoMes = horasTrabalhadas - horasPrevistas;
 
     // Calcular saldo total (todos os meses anteriores)
-    const saldoTotal = await this.calcularSaldoTotal(usuarioId, dataInicio);
+    const saldoTotal = await this.calcularSaldoTotal(
+      usuarioId,
+      dataInicioCalculo,
+    );
 
     return {
-      saldoMes,
-      horasTrabalhadas,
-      horasPrevistas,
-      saldoTotal: saldoTotal + saldoMes,
+      saldoMes: Math.round(saldoMes * 100) / 100,
+      horasTrabalhadas: Math.round(horasTrabalhadas * 100) / 100,
+      horasPrevistas: Math.round(horasPrevistas * 100) / 100,
+      saldoTotal: Math.round((saldoTotal + saldoMes) * 100) / 100,
+      diasTrabalhados,
+      diasUteis,
+      horasSemanais,
+      semanasTrabalhadas,
     };
   }
 
@@ -213,38 +245,69 @@ export class PontoService {
     tipo: TipoRegistro,
     registrosHoje: RegistroPonto[],
   ): void {
+    // Verificar se já existe registro do mesmo tipo hoje
+    const jaRegistrado = registrosHoje.some(
+      (registro) => registro.tipo === tipo,
+    );
+    if (jaRegistrado) {
+      throw new BadRequestException(
+        `Você já registrou ${this.getTipoLabel(tipo)} hoje`,
+      );
+    }
+
+    // Verificar se todos os registros do dia estão completos (máximo 4 registros)
+    if (registrosHoje.length >= 4) {
+      throw new BadRequestException(
+        'Todos os registros do dia já foram feitos (entrada, intervalo início, intervalo fim, saída)',
+      );
+    }
+
+    // Validar sequência baseada no primeiro registro (sem registros)
     if (registrosHoje.length === 0) {
       if (tipo !== TipoRegistro.ENTRADA) {
         throw new BadRequestException(
-          'Primeiro registro do dia deve ser de entrada',
+          'O primeiro registro do dia deve ser de entrada',
         );
       }
       return;
     }
 
-    const ultimoRegistro = registrosHoje[0];
-    const sequenciaValida = this.obterSequenciaValida(ultimoRegistro.tipo);
+    // Validar sequência baseada no último registro
+    const ultimoRegistro = registrosHoje[registrosHoje.length - 1];
+    const proximoTipoEsperado = this.obterProximoTipoEsperado(
+      ultimoRegistro.tipo,
+    );
 
-    if (!sequenciaValida.includes(tipo)) {
+    if (tipo !== proximoTipoEsperado) {
       throw new BadRequestException(
-        `Sequência inválida. Após ${ultimoRegistro.tipo}, o próximo registro deve ser: ${sequenciaValida.join(', ')}`,
+        `O próximo registro deve ser: ${this.getTipoLabel(proximoTipoEsperado)}`,
       );
     }
   }
 
-  private obterSequenciaValida(tipoAtual: TipoRegistro): TipoRegistro[] {
+  private obterProximoTipoEsperado(tipoAtual: TipoRegistro): TipoRegistro {
     switch (tipoAtual) {
       case TipoRegistro.ENTRADA:
-        return [TipoRegistro.INTERVALO_INICIO, TipoRegistro.SAIDA];
+        return TipoRegistro.INTERVALO_INICIO;
       case TipoRegistro.INTERVALO_INICIO:
-        return [TipoRegistro.INTERVALO_FIM];
+        return TipoRegistro.INTERVALO_FIM;
       case TipoRegistro.INTERVALO_FIM:
-        return [TipoRegistro.SAIDA];
-      case TipoRegistro.SAIDA:
-        return [TipoRegistro.ENTRADA]; // Próximo dia
+        return TipoRegistro.SAIDA;
       default:
-        return [];
+        throw new BadRequestException(
+          'Todos os registros do dia já foram completados',
+        );
     }
+  }
+
+  private getTipoLabel(tipo: TipoRegistro): string {
+    const labels = {
+      [TipoRegistro.ENTRADA]: 'entrada',
+      [TipoRegistro.INTERVALO_INICIO]: 'início do intervalo',
+      [TipoRegistro.INTERVALO_FIM]: 'fim do intervalo',
+      [TipoRegistro.SAIDA]: 'saída',
+    };
+    return labels[tipo] || tipo;
   }
 
   private calcularDistancia(
@@ -265,6 +328,216 @@ export class PontoService {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
     return R * c; // Distância em metros
+  }
+
+  private calcularHorasTrabalhadasPorDia(registros: RegistroPonto[]): number {
+    const registrosPorDia = new Map<string, RegistroPonto[]>();
+
+    // Agrupar registros por dia
+    for (const registro of registros) {
+      const data = registro.dataHora.toISOString().split('T')[0];
+      if (!registrosPorDia.has(data)) {
+        registrosPorDia.set(data, []);
+      }
+      registrosPorDia.get(data)!.push(registro);
+    }
+
+    let totalHoras = 0;
+
+    // Calcular horas para cada dia
+    for (const [data, registrosDia] of registrosPorDia) {
+      const horasDia = this.calcularHorasDia(registrosDia);
+      totalHoras += horasDia;
+    }
+
+    return totalHoras;
+  }
+
+  private calcularHorasDia(registros: RegistroPonto[]): number {
+    registros.sort((a, b) => a.dataHora.getTime() - b.dataHora.getTime());
+
+    let horasTrabalhadas = 0;
+    let entrada: Date | null = null;
+    let saidaIntervalo: Date | null = null;
+
+    for (const registro of registros) {
+      switch (registro.tipo) {
+        case TipoRegistro.ENTRADA:
+          entrada = registro.dataHora;
+          break;
+
+        case TipoRegistro.INTERVALO_INICIO:
+          if (entrada) {
+            // Calcular manhã (entrada até início do intervalo)
+            const horasManha =
+              (registro.dataHora.getTime() - entrada.getTime()) /
+              (1000 * 60 * 60);
+            horasTrabalhadas += horasManha;
+          }
+          break;
+
+        case TipoRegistro.INTERVALO_FIM:
+          saidaIntervalo = registro.dataHora;
+          break;
+
+        case TipoRegistro.SAIDA:
+          if (saidaIntervalo) {
+            // Calcular tarde (fim do intervalo até saída)
+            const horasTarde =
+              (registro.dataHora.getTime() - saidaIntervalo.getTime()) /
+              (1000 * 60 * 60);
+            horasTrabalhadas += horasTarde;
+          } else if (entrada) {
+            // Jornada sem intervalo registrado
+            const horasTotal =
+              (registro.dataHora.getTime() - entrada.getTime()) /
+              (1000 * 60 * 60);
+            horasTrabalhadas += horasTotal;
+          }
+          break;
+      }
+    }
+
+    return horasTrabalhadas;
+  }
+
+  private parseHorario(horario: string): number {
+    const [horas, minutos] = horario.split(':').map(Number);
+    return horas + minutos / 60;
+  }
+
+  private calcularDiasTrabalhados(registros: RegistroPonto[]): number {
+    const diasTrabalhados = new Set<string>();
+
+    for (const registro of registros) {
+      const data = registro.dataHora.toISOString().split('T')[0];
+      diasTrabalhados.add(data);
+    }
+
+    return diasTrabalhados.size;
+  }
+
+  private calcularHorasPrevisasNovas(
+    dataInicio: Date,
+    dataFim: Date,
+    usuario: Usuario,
+  ): number {
+    let horasTotal = 0;
+    const data = new Date(dataInicio);
+
+    while (data <= dataFim) {
+      const diaSemana = data.getDay();
+      const horaseDia = this.calcularHorasDiaPrevistas(diaSemana, usuario);
+      if (horaseDia > 0) {
+        horasTotal += horaseDia;
+      }
+
+      data.setDate(data.getDate() + 1);
+    }
+
+    return horasTotal;
+  }
+
+  private calcularHorasDiaPrevistas(
+    diaSemana: number,
+    usuario: Usuario,
+  ): number {
+    try {
+      // Priorizar horários individuais do funcionário
+      if (
+        usuario.horariosFuncionario &&
+        usuario.horariosFuncionario[diaSemana.toString()]
+      ) {
+        const horario = usuario.horariosFuncionario[diaSemana.toString()];
+
+        // Verificar se o funcionário trabalha neste dia
+        if (!horario.ativo) {
+          return 0;
+        }
+
+        const inicio = this.parseHorario(horario.inicio);
+        const fim = this.parseHorario(horario.fim);
+        let horasTotal = fim - inicio;
+
+        // Descontar intervalo se existir
+        if (
+          horario.temIntervalo &&
+          horario.intervaloInicio &&
+          horario.intervaloFim
+        ) {
+          const intervaloInicio = this.parseHorario(horario.intervaloInicio);
+          const intervaloFim = this.parseHorario(horario.intervaloFim);
+          const horasIntervalo = intervaloFim - intervaloInicio;
+          horasTotal -= horasIntervalo;
+        }
+
+        return horasTotal;
+      }
+
+      // Fallback para horários da empresa
+      if (
+        usuario.empresa.horariosSemanais &&
+        usuario.empresa.horariosSemanais[diaSemana.toString()]
+      ) {
+        const horario = usuario.empresa.horariosSemanais[diaSemana.toString()];
+
+        // Verificar se a empresa funciona neste dia
+        if (!horario.ativo) {
+          return 0;
+        }
+
+        const inicio = this.parseHorario(horario.inicio);
+        const fim = this.parseHorario(horario.fim);
+        let horasTotal = fim - inicio;
+
+        // Descontar intervalo se existir
+        if (
+          horario.temIntervalo &&
+          horario.intervaloInicio &&
+          horario.intervaloFim
+        ) {
+          const intervaloInicio = this.parseHorario(horario.intervaloInicio);
+          const intervaloFim = this.parseHorario(horario.intervaloFim);
+          const horasIntervalo = intervaloFim - intervaloInicio;
+          horasTotal -= horasIntervalo;
+        }
+
+        return horasTotal;
+      }
+
+      return 0;
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  private calcularDiasUteisDoUsuario(
+    dataInicio: Date,
+    dataFim: Date,
+    usuario: Usuario,
+  ): number {
+    let diasUteis = 0;
+    const data = new Date(dataInicio);
+
+    while (data <= dataFim) {
+      const diaSemana = data.getDay();
+      const horasDia = this.calcularHorasDiaPrevistas(diaSemana, usuario);
+
+      // Contar como dia útil se o funcionário tem horas previstas neste dia
+      if (horasDia > 0) {
+        diasUteis++;
+      }
+
+      data.setDate(data.getDate() + 1);
+    }
+
+    return diasUteis;
+  }
+
+  private calcularSemanas(dataInicio: Date, dataFim: Date): number {
+    const diffTime = dataFim.getTime() - dataInicio.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.ceil(diffDays / 7);
   }
 
   private calcularDiasUteis(dataInicio: Date, dataFim: Date): number {
@@ -324,8 +597,6 @@ export class PontoService {
       dataHora: registro.dataHora,
       latitude: registro.latitude,
       longitude: registro.longitude,
-      endereco: registro.endereco,
-      precisao: registro.precisao,
       dentroDoRaio: registro.dentroDoRaio,
       observacoes: registro.observacoes,
       createdAt: registro.createdAt,

@@ -46,12 +46,33 @@ export class Usuario {
   @Column({ type: 'date', nullable: true })
   dataAdmissao: Date;
 
-  @Column({ type: 'json', nullable: true })
-  horarioTrabalho: {
-    entrada: string;
-    saida: string;
-    intervalos: { inicio: string; fim: string }[];
+  // Configurações individuais de trabalho
+  @Column({
+    name: 'horarios_funcionario',
+    type: 'jsonb',
+    nullable: true,
+    comment: 'Horários específicos do funcionário por dia da semana',
+  })
+  horariosFuncionario?: {
+    [diaSemana: string]: {
+      ativo: boolean;
+      inicio: string;
+      fim: string;
+      temIntervalo: boolean;
+      intervaloInicio?: string;
+      intervaloFim?: string;
+    };
   };
+
+  @Column({
+    name: 'carga_horaria_semanal',
+    type: 'decimal',
+    precision: 4,
+    scale: 2,
+    default: 40,
+    comment: 'Carga horária semanal contratual (calculada automaticamente)',
+  })
+  cargaHorariaSemanal: number;
 
   @Column({
     type: 'enum',

@@ -1,16 +1,8 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Post,
-  Query,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { JwtPayload } from '../auth/interfaces/auth.interface';
+import { Usuario } from '../usuarios/entities/usuario.entity';
 import { RegistrarPontoDto } from './dto/registrar-ponto.dto';
 import { PontoService } from './ponto.service';
 
@@ -22,19 +14,14 @@ export class PontoController {
   @Post('registrar')
   async registrarPonto(
     @Body() registrarPontoDto: RegistrarPontoDto,
-    @CurrentUser() user: JwtPayload,
-    @Req() req: any,
+    @CurrentUser() user: Usuario,
   ) {
-    // Adicionar informações do dispositivo
-    registrarPontoDto.userAgent = req.headers['user-agent'];
-    registrarPontoDto.ipAddress = req.ip || req.connection.remoteAddress;
-
-    return this.pontoService.registrarPonto(user.sub, registrarPontoDto);
+    return this.pontoService.registrarPonto(user.id, registrarPontoDto);
   }
 
   @Get('registros')
   async buscarRegistros(
-    @CurrentUser() user: JwtPayload,
+    @CurrentUser() user: Usuario,
     @Query('dataInicio') dataInicio?: string,
     @Query('dataFim') dataFim?: string,
   ) {
@@ -42,20 +29,20 @@ export class PontoController {
     const dataFimDate = dataFim ? new Date(dataFim) : undefined;
 
     return this.pontoService.buscarRegistrosUsuario(
-      user.sub,
+      user.id,
       dataInicioDate,
       dataFimDate,
     );
   }
 
   @Get('ultimo-registro')
-  async buscarUltimoRegistro(@CurrentUser() user: JwtPayload) {
-    return this.pontoService.buscarUltimoRegistro(user.sub);
+  async buscarUltimoRegistro(@CurrentUser() user: Usuario) {
+    return this.pontoService.buscarUltimoRegistro(user.id);
   }
 
   @Get('banco-horas')
   async calcularBancoHoras(
-    @CurrentUser() user: JwtPayload,
+    @CurrentUser() user: Usuario,
     @Query('mes') mes: string,
     @Query('ano') ano: string,
   ) {
@@ -66,6 +53,6 @@ export class PontoController {
       throw new Error('Mês e ano devem ser números válidos');
     }
 
-    return this.pontoService.calcularBancoHoras(user.sub, mesNum, anoNum);
+    return this.pontoService.calcularBancoHoras(user.id, mesNum, anoNum);
   }
 }

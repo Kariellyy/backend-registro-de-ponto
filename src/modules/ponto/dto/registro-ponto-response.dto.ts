@@ -7,8 +7,6 @@ export class RegistroPontoResponseDto {
   dataHora: Date;
   latitude?: number;
   longitude?: number;
-  endereco?: string;
-  precisao?: number;
   dentroDoRaio: boolean;
   observacoes?: string;
   createdAt: Date;

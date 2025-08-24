@@ -4,7 +4,6 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  Matches,
   Max,
   Min,
   MinLength,
@@ -44,35 +43,6 @@ export class CreateEmpresaDto {
   @Max(1000, { message: 'Raio permitido deve ser no máximo 1000 metros' })
   raioPermitido?: number;
 
-  // Configurações de horário
-  @IsOptional()
-  @IsString({ message: 'Horário de início da manhã deve ser uma string' })
-  @Matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, {
-    message: 'Horário de início da manhã deve estar no formato HH:MM',
-  })
-  horarioInicioManha?: string;
-
-  @IsOptional()
-  @IsString({ message: 'Horário de fim da manhã deve ser uma string' })
-  @Matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, {
-    message: 'Horário de fim da manhã deve estar no formato HH:MM',
-  })
-  horarioFimManha?: string;
-
-  @IsOptional()
-  @IsString({ message: 'Horário de início da tarde deve ser uma string' })
-  @Matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, {
-    message: 'Horário de início da tarde deve estar no formato HH:MM',
-  })
-  horarioInicioTarde?: string;
-
-  @IsOptional()
-  @IsString({ message: 'Horário de fim da tarde deve ser uma string' })
-  @Matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, {
-    message: 'Horário de fim da tarde deve estar no formato HH:MM',
-  })
-  horarioFimTarde?: string;
-
   // Configurações de tolerância
   @IsOptional()
   @IsNumber({}, { message: 'Tolerância de entrada deve ser um número' })
@@ -96,4 +66,16 @@ export class CreateEmpresaDto {
     message: 'Exigir justificativa fora do raio deve ser um booleano',
   })
   exigirJustificativaForaRaio?: boolean;
+
+  @IsOptional()
+  horariosSemanais?: {
+    [diaSemana: string]: {
+      ativo: boolean;
+      inicio: string;
+      fim: string;
+      temIntervalo: boolean;
+      intervaloInicio?: string;
+      intervaloFim?: string;
+    };
+  };
 }

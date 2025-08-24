@@ -68,39 +68,6 @@ export class Empresa {
   })
   raioPermitido: number;
 
-  // Configurações de horário
-  @Column({
-    name: 'horario_inicio_manha',
-    type: 'time',
-    default: '08:00:00',
-    comment: 'Horário de início do expediente da manhã',
-  })
-  horarioInicioManha: string;
-
-  @Column({
-    name: 'horario_fim_manha',
-    type: 'time',
-    default: '12:00:00',
-    comment: 'Horário de fim do expediente da manhã',
-  })
-  horarioFimManha: string;
-
-  @Column({
-    name: 'horario_inicio_tarde',
-    type: 'time',
-    default: '14:00:00',
-    comment: 'Horário de início do expediente da tarde',
-  })
-  horarioInicioTarde: string;
-
-  @Column({
-    name: 'horario_fim_tarde',
-    type: 'time',
-    default: '18:00:00',
-    comment: 'Horário de fim do expediente da tarde',
-  })
-  horarioFimTarde: string;
-
   // Configurações de tolerância
   @Column({
     name: 'tolerancia_entrada',
@@ -134,6 +101,26 @@ export class Empresa {
     comment: 'Exige justificativa para registro fora do raio',
   })
   exigirJustificativaForaRaio: boolean;
+
+  // Configurações de horários por dia da semana
+  @Column({
+    name: 'horarios_semanais',
+    type: 'jsonb',
+    default: () =>
+      `'{"1":{"ativo":true,"inicio":"08:00","fim":"18:00","temIntervalo":true,"intervaloInicio":"12:00","intervaloFim":"13:00"},"2":{"ativo":true,"inicio":"08:00","fim":"18:00","temIntervalo":true,"intervaloInicio":"12:00","intervaloFim":"13:00"},"3":{"ativo":true,"inicio":"08:00","fim":"18:00","temIntervalo":true,"intervaloInicio":"12:00","intervaloFim":"13:00"},"4":{"ativo":true,"inicio":"08:00","fim":"18:00","temIntervalo":true,"intervaloInicio":"12:00","intervaloFim":"13:00"},"5":{"ativo":true,"inicio":"08:00","fim":"18:00","temIntervalo":true,"intervaloInicio":"12:00","intervaloFim":"13:00"},"6":{"ativo":true,"inicio":"08:00","fim":"12:00","temIntervalo":false,"intervaloInicio":"","intervaloFim":""},"0":{"ativo":false,"inicio":"","fim":"","temIntervalo":false,"intervaloInicio":"","intervaloFim":""}}'`,
+    comment:
+      'Horários de funcionamento por dia da semana (0=Dom, 1=Seg, ..., 6=Sab)',
+  })
+  horariosSemanais: {
+    [diaSemana: string]: {
+      ativo: boolean;
+      inicio: string;
+      fim: string;
+      temIntervalo: boolean;
+      intervaloInicio?: string;
+      intervaloFim?: string;
+    };
+  };
 
   @OneToMany(() => Usuario, (usuario) => usuario.empresa)
   usuarios: Usuario[];

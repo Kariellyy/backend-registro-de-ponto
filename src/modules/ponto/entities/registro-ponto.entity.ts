@@ -69,68 +69,19 @@ export class RegistroPonto {
   longitude: number;
 
   @Column({
-    name: 'endereco',
-    type: 'varchar',
-    length: 500,
-    nullable: true,
-  })
-  endereco: string;
-
-  @Column({
-    name: 'precisao',
-    type: 'decimal',
-    precision: 5,
-    scale: 2,
-    nullable: true,
-    comment: 'Precisão do GPS em metros',
-  })
-  precisao: number;
-
-  @Column({
     name: 'dentro_do_raio',
     type: 'boolean',
     default: true,
   })
   dentroDoRaio: boolean;
 
-  // Campos de dispositivo
-  @Column({
-    name: 'user_agent',
-    type: 'varchar',
-    length: 500,
-    nullable: true,
-  })
-  userAgent: string;
-
-  @Column({
-    name: 'ip_address',
-    type: 'varchar',
-    length: 45,
-    nullable: true,
-  })
-  ipAddress: string;
-
-  // Campos de validação
+  // Campo opcional para observações/justificativas
   @Column({
     name: 'observacoes',
     type: 'text',
     nullable: true,
   })
   observacoes: string;
-
-  @Column({
-    name: 'aprovado_por',
-    type: 'uuid',
-    nullable: true,
-  })
-  aprovadoPor: string;
-
-  @Column({
-    name: 'data_aprovacao',
-    type: 'timestamp',
-    nullable: true,
-  })
-  dataAprovacao: Date;
 
   // Relacionamentos
   @ManyToOne(() => Usuario, (usuario) => usuario.registrosPonto, {

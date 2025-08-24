@@ -2,6 +2,7 @@ import {
   IsDateString,
   IsEmail,
   IsEnum,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -48,11 +49,20 @@ export class CreateUsuarioDto {
   dataAdmissao?: string;
 
   @IsOptional()
-  horarioTrabalho?: {
-    entrada: string;
-    saida: string;
-    intervalos?: { inicio: string; fim: string }[];
+  horariosFuncionario?: {
+    [diaSemana: string]: {
+      ativo: boolean;
+      inicio: string;
+      fim: string;
+      temIntervalo: boolean;
+      intervaloInicio?: string;
+      intervaloFim?: string;
+    };
   };
+
+  @IsOptional()
+  @IsNumber({}, { message: 'Carga horária semanal deve ser um número' })
+  cargaHorariaSemanal?: number;
 
   @IsEnum(UserRole, { message: 'Papel deve ser um valor válido' })
   papel: UserRole;
