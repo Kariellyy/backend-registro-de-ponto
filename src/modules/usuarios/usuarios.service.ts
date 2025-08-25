@@ -10,6 +10,7 @@ import { In, Repository } from 'typeorm';
 import { Departamento } from '../empresas/entities/departamento.entity';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
+import { HorarioFuncionario } from './entities/horario-funcionario.entity';
 import { Usuario } from './entities/usuario.entity';
 
 @Injectable()
@@ -19,6 +20,8 @@ export class UsuariosService {
     private readonly usuarioRepository: Repository<Usuario>,
     @InjectRepository(Departamento)
     private readonly departamentoRepository: Repository<Departamento>,
+    @InjectRepository(HorarioFuncionario)
+    private readonly horarioFuncionarioRepository: Repository<HorarioFuncionario>,
   ) {}
 
   async create(createUsuarioDto: CreateUsuarioDto): Promise<Usuario> {
@@ -71,7 +74,7 @@ export class UsuariosService {
   async findOne(id: string): Promise<Usuario> {
     const usuario = await this.usuarioRepository.findOne({
       where: { id },
-      relations: ['empresa', 'departamento'],
+      relations: ['empresa', 'departamento', 'horarios'],
       select: [
         'id',
         'nome',
@@ -82,7 +85,6 @@ export class UsuariosService {
         'cargo',
         'departamentoId',
         'dataAdmissao',
-        'horariosFuncionario',
         'papel',
         'status',
         'empresaId',
@@ -94,17 +96,28 @@ export class UsuariosService {
     if (!usuario) {
       throw new NotFoundException(`Usuário com ID ${id} não encontrado`);
     }
+
+    // Ordenar horários por dia da semana
+    if (usuario.horarios) {
+      usuario.horarios.sort((a, b) => a.diaSemana - b.diaSemana);
+    }
+
     return usuario;
   }
 
   async findByEmail(email: string): Promise<Usuario> {
     const usuario = await this.usuarioRepository.findOne({
       where: { email },
-      relations: ['empresa', 'departamento'],
+      relations: ['empresa', 'departamento', 'horarios'],
     });
 
     if (!usuario) {
       throw new NotFoundException(`Usuário com email ${email} não encontrado`);
+    }
+
+    // Ordenar horários por dia da semana
+    if (usuario.horarios) {
+      usuario.horarios.sort((a, b) => a.diaSemana - b.diaSemana);
     }
 
     return usuario;
@@ -113,7 +126,7 @@ export class UsuariosService {
   async findByEmailWithPassword(email: string): Promise<Usuario> {
     const usuario = await this.usuarioRepository.findOne({
       where: { email },
-      relations: ['empresa', 'departamento'],
+      relations: ['empresa', 'departamento', 'horarios'],
       select: [
         'id',
         'nome',
@@ -131,6 +144,11 @@ export class UsuariosService {
 
     if (!usuario) {
       throw new NotFoundException(`Usuário com email ${email} não encontrado`);
+    }
+
+    // Ordenar horários por dia da semana
+    if (usuario.horarios) {
+      usuario.horarios.sort((a, b) => a.diaSemana - b.diaSemana);
     }
 
     return usuario;
@@ -166,12 +184,12 @@ export class UsuariosService {
   }
 
   async findByEmpresa(empresaId: string): Promise<Usuario[]> {
-    return await this.usuarioRepository.find({
+    const usuarios = await this.usuarioRepository.find({
       where: {
         empresaId,
         papel: In(['administrador', 'funcionario']), // Excluir donos da empresa
       },
-      relations: ['empresa', 'departamento'],
+      relations: ['empresa', 'departamento', 'horarios'],
       select: [
         'id',
         'nome',
@@ -182,7 +200,6 @@ export class UsuariosService {
         'cargo',
         'departamentoId',
         'dataAdmissao',
-        'horariosFuncionario',
         'papel',
         'status',
         'empresaId',
@@ -193,15 +210,24 @@ export class UsuariosService {
         nome: 'ASC', // Ordenar por nome alfabeticamente
       },
     });
+
+    // Ordenar horários por dia da semana para cada usuário
+    usuarios.forEach((usuario) => {
+      if (usuario.horarios) {
+        usuario.horarios.sort((a, b) => a.diaSemana - b.diaSemana);
+      }
+    });
+
+    return usuarios;
   }
 
   async findFuncionariosByEmpresa(empresaId: string): Promise<Usuario[]> {
-    return await this.usuarioRepository.find({
+    const usuarios = await this.usuarioRepository.find({
       where: {
         empresaId,
         papel: 'funcionario' as any, // Apenas funcionários
       },
-      relations: ['empresa', 'departamento'],
+      relations: ['empresa', 'departamento', 'horarios'],
       select: [
         'id',
         'nome',
@@ -212,7 +238,6 @@ export class UsuariosService {
         'cargo',
         'departamentoId',
         'dataAdmissao',
-        'horariosFuncionario',
         'papel',
         'status',
         'empresaId',
@@ -223,5 +248,14 @@ export class UsuariosService {
         nome: 'ASC',
       },
     });
+
+    // Ordenar horários por dia da semana para cada usuário
+    usuarios.forEach((usuario) => {
+      if (usuario.horarios) {
+        usuario.horarios.sort((a, b) => a.diaSemana - b.diaSemana);
+      }
+    });
+
+    return usuarios;
   }
 }

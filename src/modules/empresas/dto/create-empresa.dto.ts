@@ -1,4 +1,6 @@
+import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsEmail,
   IsNumber,
@@ -7,7 +9,9 @@ import {
   Max,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+import { CreateHorarioEmpresaDto } from './horario-empresa.dto';
 
 export class CreateEmpresaDto {
   @IsString({ message: 'Nome deve ser uma string' })
@@ -68,14 +72,8 @@ export class CreateEmpresaDto {
   exigirJustificativaForaRaio?: boolean;
 
   @IsOptional()
-  horariosSemanais?: {
-    [diaSemana: string]: {
-      ativo: boolean;
-      inicio: string;
-      fim: string;
-      temIntervalo: boolean;
-      intervaloInicio?: string;
-      intervaloFim?: string;
-    };
-  };
+  @IsArray({ message: 'Horários semanais deve ser um array' })
+  @ValidateNested({ each: true })
+  @Type(() => CreateHorarioEmpresaDto)
+  horarios?: CreateHorarioEmpresaDto[];
 }

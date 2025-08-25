@@ -13,6 +13,7 @@ import { UserRole } from '../../../core/enums/user-role.enum';
 import { UserStatus } from '../../../core/enums/user-status.enum';
 import { Departamento } from '../../empresas/entities/departamento.entity';
 import { Empresa } from '../../empresas/entities/empresa.entity';
+import { HorarioFuncionario } from './horario-funcionario.entity';
 
 @Entity('usuarios')
 export class Usuario {
@@ -45,24 +46,6 @@ export class Usuario {
 
   @Column({ type: 'date', nullable: true })
   dataAdmissao: Date;
-
-  // Configurações individuais de trabalho
-  @Column({
-    name: 'horarios_funcionario',
-    type: 'jsonb',
-    nullable: true,
-    comment: 'Horários específicos do funcionário por dia da semana',
-  })
-  horariosFuncionario?: {
-    [diaSemana: string]: {
-      ativo: boolean;
-      inicio: string;
-      fim: string;
-      temIntervalo: boolean;
-      intervaloInicio?: string;
-      intervaloFim?: string;
-    };
-  };
 
   @Column({
     name: 'carga_horaria_semanal',
@@ -105,6 +88,9 @@ export class Usuario {
 
   @OneToMany(() => RegistroPonto, (registro) => registro.usuario)
   registrosPonto: RegistroPonto[];
+
+  @OneToMany(() => HorarioFuncionario, (horario) => horario.usuario)
+  horarios: HorarioFuncionario[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

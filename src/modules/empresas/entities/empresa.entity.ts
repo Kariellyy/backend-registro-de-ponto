@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { Usuario } from '../../usuarios/entities/usuario.entity';
 import { Departamento } from './departamento.entity';
+import { HorarioEmpresa } from './horario-empresa.entity';
 
 @Entity('empresas')
 export class Empresa {
@@ -102,31 +103,14 @@ export class Empresa {
   })
   exigirJustificativaForaRaio: boolean;
 
-  // Configurações de horários por dia da semana
-  @Column({
-    name: 'horarios_semanais',
-    type: 'jsonb',
-    default: () =>
-      `'{"1":{"ativo":true,"inicio":"08:00","fim":"18:00","temIntervalo":false,"intervaloInicio":"","intervaloFim":""},"2":{"ativo":true,"inicio":"08:00","fim":"18:00","temIntervalo":false,"intervaloInicio":"","intervaloFim":""},"3":{"ativo":true,"inicio":"08:00","fim":"18:00","temIntervalo":false,"intervaloInicio":"","intervaloFim":""},"4":{"ativo":true,"inicio":"08:00","fim":"18:00","temIntervalo":false,"intervaloInicio":"","intervaloFim":""},"5":{"ativo":true,"inicio":"08:00","fim":"18:00","temIntervalo":false,"intervaloInicio":"","intervaloFim":""},"6":{"ativo":true,"inicio":"08:00","fim":"12:00","temIntervalo":false,"intervaloInicio":"","intervaloFim":""},"0":{"ativo":false,"inicio":"","fim":"","temIntervalo":false,"intervaloInicio":"","intervaloFim":""}}'`,
-    comment:
-      'Horários de funcionamento por dia da semana (0=Dom, 1=Seg, ..., 6=Sab)',
-  })
-  horariosSemanais: {
-    [diaSemana: string]: {
-      ativo: boolean;
-      inicio: string;
-      fim: string;
-      temIntervalo: boolean;
-      intervaloInicio?: string;
-      intervaloFim?: string;
-    };
-  };
-
   @OneToMany(() => Usuario, (usuario) => usuario.empresa)
   usuarios: Usuario[];
 
   @OneToMany(() => Departamento, (departamento) => departamento.empresa)
   departamentos: Departamento[];
+
+  @OneToMany(() => HorarioEmpresa, (horario) => horario.empresa)
+  horarios: HorarioEmpresa[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

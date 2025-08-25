@@ -6,6 +6,8 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
 import { Empresa } from '../empresas/entities/empresa.entity';
+import { HorarioEmpresa } from '../empresas/entities/horario-empresa.entity';
+import { HorarioFuncionario } from '../usuarios/entities/horario-funcionario.entity';
 import { Usuario } from '../usuarios/entities/usuario.entity';
 import { RegistrarPontoDto } from './dto/registrar-ponto.dto';
 import { RegistroPontoResponseDto } from './dto/registro-ponto-response.dto';
@@ -170,7 +172,7 @@ export class PontoService {
     // Buscar usuário e empresa
     const usuario = await this.usuarioRepository.findOne({
       where: { id: usuarioId },
-      relations: ['empresa'],
+      relations: ['empresa', 'empresa.horarios', 'horarios'],
     });
 
     if (!usuario) {
@@ -444,69 +446,80 @@ export class PontoService {
   ): number {
     try {
       // Priorizar horários individuais do funcionário
-      if (
-        usuario.horariosFuncionario &&
-        usuario.horariosFuncionario[diaSemana.toString()]
-      ) {
-        const horario = usuario.horariosFuncionario[diaSemana.toString()];
+      if (usuario.horarios && usuario.horarios.length > 0) {
+        const horariosFuncionario = this.converterHorariosFuncionario(
+          usuario.horarios,
+        );
 
-        // Verificar se o funcionário trabalha neste dia
-        if (!horario.ativo) {
-          return 0;
+        if (horariosFuncionario[diaSemana.toString()]) {
+          const horario = horariosFuncionario[diaSemana.toString()];
+
+          // Verificar se o funcionário trabalha neste dia
+          if (!horario.ativo) {
+            return 0;
+          }
+
+          const inicio = this.parseHorario(horario.inicio);
+          const fim = this.parseHorario(horario.fim);
+          let horasTotal = fim - inicio;
+
+          // Descontar intervalo se existir
+          if (
+            horario.temIntervalo &&
+            horario.intervaloInicio &&
+            horario.intervaloFim
+          ) {
+            const intervaloInicio = this.parseHorario(horario.intervaloInicio);
+            const intervaloFim = this.parseHorario(horario.intervaloFim);
+            const horasIntervalo = intervaloFim - intervaloInicio;
+            horasTotal -= horasIntervalo;
+          }
+
+          return horasTotal;
         }
-
-        const inicio = this.parseHorario(horario.inicio);
-        const fim = this.parseHorario(horario.fim);
-        let horasTotal = fim - inicio;
-
-        // Descontar intervalo se existir
-        if (
-          horario.temIntervalo &&
-          horario.intervaloInicio &&
-          horario.intervaloFim
-        ) {
-          const intervaloInicio = this.parseHorario(horario.intervaloInicio);
-          const intervaloFim = this.parseHorario(horario.intervaloFim);
-          const horasIntervalo = intervaloFim - intervaloInicio;
-          horasTotal -= horasIntervalo;
-        }
-
-        return horasTotal;
       }
 
       // Fallback para horários da empresa
       if (
-        usuario.empresa.horariosSemanais &&
-        usuario.empresa.horariosSemanais[diaSemana.toString()]
+        usuario.empresa &&
+        usuario.empresa.horarios &&
+        usuario.empresa.horarios.length > 0
       ) {
-        const horario = usuario.empresa.horariosSemanais[diaSemana.toString()];
+        const horariosEmpresa = this.converterHorariosEmpresa(
+          usuario.empresa.horarios,
+        );
 
-        // Verificar se a empresa funciona neste dia
-        if (!horario.ativo) {
-          return 0;
+        if (horariosEmpresa[diaSemana.toString()]) {
+          const horario = horariosEmpresa[diaSemana.toString()];
+
+          // Verificar se a empresa funciona neste dia
+          if (!horario.ativo) {
+            return 0;
+          }
+
+          const inicio = this.parseHorario(horario.inicio);
+          const fim = this.parseHorario(horario.fim);
+          let horasTotal = fim - inicio;
+
+          // Descontar intervalo se existir
+          if (
+            horario.temIntervalo &&
+            horario.intervaloInicio &&
+            horario.intervaloFim
+          ) {
+            const intervaloInicio = this.parseHorario(horario.intervaloInicio);
+            const intervaloFim = this.parseHorario(horario.intervaloFim);
+            const horasIntervalo = intervaloFim - intervaloInicio;
+            horasTotal -= horasIntervalo;
+          }
+
+          return horasTotal;
         }
-
-        const inicio = this.parseHorario(horario.inicio);
-        const fim = this.parseHorario(horario.fim);
-        let horasTotal = fim - inicio;
-
-        // Descontar intervalo se existir
-        if (
-          horario.temIntervalo &&
-          horario.intervaloInicio &&
-          horario.intervaloFim
-        ) {
-          const intervaloInicio = this.parseHorario(horario.intervaloInicio);
-          const intervaloFim = this.parseHorario(horario.intervaloFim);
-          const horasIntervalo = intervaloFim - intervaloInicio;
-          horasTotal -= horasIntervalo;
-        }
-
-        return horasTotal;
       }
 
       return 0;
     } catch (error) {
+      console.error('Erro ao calcular horas previstas:', error);
       return 0;
     }
   }
@@ -606,5 +619,44 @@ export class PontoService {
         email: usuario.email,
       },
     };
+  }
+
+  // Funções utilitárias para conversão de horários
+  private converterHorariosFuncionario(horarios: HorarioFuncionario[]): {
+    [diaSemana: string]: any;
+  } {
+    const resultado: { [diaSemana: string]: any } = {};
+
+    horarios.forEach((horario) => {
+      resultado[horario.diaSemana.toString()] = {
+        ativo: horario.ativo,
+        inicio: horario.horarioInicio || '',
+        fim: horario.horarioFim || '',
+        temIntervalo: horario.temIntervalo,
+        intervaloInicio: horario.intervaloInicio || '',
+        intervaloFim: horario.intervaloFim || '',
+      };
+    });
+
+    return resultado;
+  }
+
+  private converterHorariosEmpresa(horarios: HorarioEmpresa[]): {
+    [diaSemana: string]: any;
+  } {
+    const resultado: { [diaSemana: string]: any } = {};
+
+    horarios.forEach((horario) => {
+      resultado[horario.diaSemana.toString()] = {
+        ativo: horario.ativo,
+        inicio: horario.horarioInicio || '',
+        fim: horario.horarioFim || '',
+        temIntervalo: horario.temIntervalo,
+        intervaloInicio: horario.intervaloInicio || '',
+        intervaloFim: horario.intervaloFim || '',
+      };
+    });
+
+    return resultado;
   }
 }
