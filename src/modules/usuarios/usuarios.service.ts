@@ -63,12 +63,41 @@ export class UsuariosService {
     // Hash da senha
     const hashedPassword = await bcrypt.hash(passwordToUse, 10);
 
+    // Remover horariosFuncionario do DTO para não salvar no usuário
+    const { horariosFuncionario, ...usuarioData } = createUsuarioDto;
+
     const usuario = this.usuarioRepository.create({
-      ...createUsuarioDto,
+      ...usuarioData,
       password: hashedPassword,
     });
 
-    return await this.usuarioRepository.save(usuario);
+    // Salvar o usuário primeiro
+    const savedUsuario = await this.usuarioRepository.save(usuario);
+
+    // Processar e salvar os horários do funcionário
+    if (horariosFuncionario) {
+      const horariosToSave = Object.entries(horariosFuncionario).map(
+        ([diaSemana, horario]) => {
+          return this.horarioFuncionarioRepository.create({
+            diaSemana: parseInt(diaSemana),
+            ativo: horario.ativo,
+            horarioInicio: horario.ativo ? horario.inicio : null,
+            horarioFim: horario.ativo ? horario.fim : null,
+            temIntervalo: horario.temIntervalo,
+            intervaloInicio: horario.temIntervalo
+              ? horario.intervaloInicio
+              : null,
+            intervaloFim: horario.temIntervalo ? horario.intervaloFim : null,
+            usuarioId: savedUsuario.id,
+          });
+        },
+      );
+
+      await this.horarioFuncionarioRepository.save(horariosToSave);
+    }
+
+    // Retornar o usuário com os horários carregados
+    return await this.findOne(savedUsuario.id);
   }
 
   async findOne(id: string): Promise<Usuario> {
@@ -167,8 +196,40 @@ export class UsuariosService {
       );
     }
 
-    Object.assign(usuario, updateUsuarioDto);
-    return await this.usuarioRepository.save(usuario);
+    // Remover horariosFuncionario do DTO para não salvar no usuário
+    const { horariosFuncionario, ...usuarioData } = updateUsuarioDto;
+
+    Object.assign(usuario, usuarioData);
+    const savedUsuario = await this.usuarioRepository.save(usuario);
+
+    // Processar e atualizar os horários do funcionário
+    if (horariosFuncionario) {
+      // Remover horários existentes
+      await this.horarioFuncionarioRepository.delete({ usuarioId: id });
+
+      // Salvar novos horários
+      const horariosToSave = Object.entries(horariosFuncionario).map(
+        ([diaSemana, horario]) => {
+          return this.horarioFuncionarioRepository.create({
+            diaSemana: parseInt(diaSemana),
+            ativo: horario.ativo,
+            horarioInicio: horario.ativo ? horario.inicio : null,
+            horarioFim: horario.ativo ? horario.fim : null,
+            temIntervalo: horario.temIntervalo,
+            intervaloInicio: horario.temIntervalo
+              ? horario.intervaloInicio
+              : null,
+            intervaloFim: horario.temIntervalo ? horario.intervaloFim : null,
+            usuarioId: id,
+          });
+        },
+      );
+
+      await this.horarioFuncionarioRepository.save(horariosToSave);
+    }
+
+    // Retornar o usuário com os horários carregados
+    return await this.findOne(id);
   }
 
   async remove(id: string): Promise<void> {
