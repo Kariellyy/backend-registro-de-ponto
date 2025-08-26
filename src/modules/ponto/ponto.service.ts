@@ -72,7 +72,7 @@ export class PontoService {
         usuarioId,
         dataHora: Between(inicioDia, fimDia),
       },
-      order: { dataHora: 'DESC' },
+      order: { dataHora: 'ASC' },
     });
 
     // Validar sequência de registros
