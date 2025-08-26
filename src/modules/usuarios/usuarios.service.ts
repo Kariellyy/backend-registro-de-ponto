@@ -103,7 +103,7 @@ export class UsuariosService {
   async findOne(id: string): Promise<Usuario> {
     const usuario = await this.usuarioRepository.findOne({
       where: { id },
-      relations: ['empresa', 'departamento', 'horarios'],
+      relations: ['empresa', 'departamento', 'cargo', 'horarios'],
       select: [
         'id',
         'nome',
@@ -111,7 +111,7 @@ export class UsuariosService {
         'telefone',
         'photoUrl',
         'cpf',
-        'cargo',
+        'cargoId',
         'departamentoId',
         'dataAdmissao',
         'papel',
@@ -137,7 +137,7 @@ export class UsuariosService {
   async findByEmail(email: string): Promise<Usuario> {
     const usuario = await this.usuarioRepository.findOne({
       where: { email },
-      relations: ['empresa', 'departamento', 'horarios'],
+      relations: ['empresa', 'departamento', 'cargo', 'horarios'],
     });
 
     if (!usuario) {
@@ -155,7 +155,7 @@ export class UsuariosService {
   async findByEmailWithPassword(email: string): Promise<Usuario> {
     const usuario = await this.usuarioRepository.findOne({
       where: { email },
-      relations: ['empresa', 'departamento', 'horarios'],
+      relations: ['empresa', 'departamento', 'cargo', 'horarios'],
       select: [
         'id',
         'nome',
@@ -258,7 +258,7 @@ export class UsuariosService {
         'telefone',
         'photoUrl',
         'cpf',
-        'cargo',
+        'cargoId',
         'departamentoId',
         'dataAdmissao',
         'papel',
@@ -288,7 +288,7 @@ export class UsuariosService {
         empresaId,
         papel: 'funcionario' as any, // Apenas funcionários
       },
-      relations: ['empresa', 'departamento', 'horarios'],
+      relations: ['empresa', 'departamento', 'cargo', 'horarios'],
       select: [
         'id',
         'nome',
@@ -296,7 +296,7 @@ export class UsuariosService {
         'telefone',
         'photoUrl',
         'cpf',
-        'cargo',
+        'cargoId',
         'departamentoId',
         'dataAdmissao',
         'papel',

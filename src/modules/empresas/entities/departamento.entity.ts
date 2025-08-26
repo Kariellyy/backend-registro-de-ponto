@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { Usuario } from '../../usuarios/entities/usuario.entity';
 import { Empresa } from './empresa.entity';
+import { Cargo } from './cargo.entity';
 
 @Entity('departamentos')
 export class Departamento {
@@ -33,6 +34,9 @@ export class Departamento {
 
   @OneToMany(() => Usuario, (usuario) => usuario.departamento)
   usuarios: Usuario[];
+
+  @OneToMany(() => Cargo, (cargo) => cargo.departamento)
+  cargos: Cargo[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

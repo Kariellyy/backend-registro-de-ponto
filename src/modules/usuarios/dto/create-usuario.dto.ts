@@ -37,8 +37,8 @@ export class CreateUsuarioDto {
   cpf?: string;
 
   @IsOptional()
-  @IsString({ message: 'Cargo deve ser uma string' })
-  cargo?: string;
+  @IsUUID('4', { message: 'ID do cargo deve ser um UUID válido' })
+  cargoId?: string;
 
   @IsOptional()
   @IsUUID('4', { message: 'ID do departamento deve ser um UUID válido' })

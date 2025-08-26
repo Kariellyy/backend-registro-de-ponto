@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { UserRole } from '../../../core/enums/user-role.enum';
 import { UserStatus } from '../../../core/enums/user-status.enum';
+import { Cargo } from '../../empresas/entities/cargo.entity';
 import { Departamento } from '../../empresas/entities/departamento.entity';
 import { Empresa } from '../../empresas/entities/empresa.entity';
 import { HorarioFuncionario } from './horario-funcionario.entity';
@@ -38,8 +39,12 @@ export class Usuario {
   @Column({ type: 'varchar', length: 14, nullable: true })
   cpf: string;
 
-  @Column({ type: 'varchar', length: 100, nullable: true })
-  cargo: string;
+  @Column({ name: 'cargo_id', type: 'uuid', nullable: true })
+  cargoId: string;
+
+  @ManyToOne(() => Cargo, (cargo) => cargo.usuarios, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'cargo_id' })
+  cargo: Cargo;
 
   @Column({ name: 'departamento_id', type: 'uuid', nullable: true })
   departamentoId: string;
