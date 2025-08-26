@@ -2,7 +2,7 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole } from '../../core/enums/user-role.enum';
 import { UserStatus } from '../../core/enums/user-status.enum';
-import { EmpresasService } from '../empresas/empresas.service';
+import { EmpresasService } from '../empresas/services/empresas.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { RegisterDto } from './dto/login.dto';
 import {
