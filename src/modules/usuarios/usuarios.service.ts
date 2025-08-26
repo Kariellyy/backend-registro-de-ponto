@@ -11,6 +11,7 @@ import { Departamento } from '../empresas/entities/departamento.entity';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 import { HorarioFuncionario } from './entities/horario-funcionario.entity';
+import { InformacoesTrabalhistas } from './entities/informacoes-trabalhistas.entity';
 import { Usuario } from './entities/usuario.entity';
 
 @Injectable()
@@ -18,6 +19,8 @@ export class UsuariosService {
   constructor(
     @InjectRepository(Usuario)
     private readonly usuarioRepository: Repository<Usuario>,
+    @InjectRepository(InformacoesTrabalhistas)
+    private readonly informacoesTrabalhistasRepository: Repository<InformacoesTrabalhistas>,
     @InjectRepository(Departamento)
     private readonly departamentoRepository: Repository<Departamento>,
     @InjectRepository(HorarioFuncionario)
@@ -63,8 +66,16 @@ export class UsuariosService {
     // Hash da senha
     const hashedPassword = await bcrypt.hash(passwordToUse, 10);
 
-    // Remover horariosFuncionario do DTO para não salvar no usuário
-    const { horariosFuncionario, ...usuarioData } = createUsuarioDto;
+    // Separar dados do usuário e informações trabalhistas
+    const {
+      horariosFuncionario,
+      cargoId,
+      departamentoId,
+      dataAdmissao,
+      inicioRegistros,
+      cargaHorariaSemanal,
+      ...usuarioData
+    } = createUsuarioDto;
 
     const usuario = this.usuarioRepository.create({
       ...usuarioData,
@@ -73,6 +84,23 @@ export class UsuariosService {
 
     // Salvar o usuário primeiro
     const savedUsuario = await this.usuarioRepository.save(usuario);
+
+    // Criar e salvar informações trabalhistas se houver dados trabalhistas completos
+    if (cargoId && departamentoId && dataAdmissao && inicioRegistros) {
+      const informacoesTrabalhistas =
+        this.informacoesTrabalhistasRepository.create({
+          usuarioId: savedUsuario.id,
+          cargoId,
+          departamentoId,
+          dataAdmissao: new Date(dataAdmissao),
+          inicioRegistros: new Date(inicioRegistros),
+          cargaHorariaSemanal: cargaHorariaSemanal || 40,
+        });
+
+      await this.informacoesTrabalhistasRepository.save(
+        informacoesTrabalhistas,
+      );
+    }
 
     // Processar e salvar os horários do funcionário
     if (horariosFuncionario) {
@@ -96,14 +124,20 @@ export class UsuariosService {
       await this.horarioFuncionarioRepository.save(horariosToSave);
     }
 
-    // Retornar o usuário com os horários carregados
+    // Retornar o usuário com as informações trabalhistas e horários carregados
     return await this.findOne(savedUsuario.id);
   }
 
   async findOne(id: string): Promise<Usuario> {
     const usuario = await this.usuarioRepository.findOne({
       where: { id },
-      relations: ['empresa', 'departamento', 'cargo', 'horarios'],
+      relations: [
+        'empresa',
+        'informacoesTrabalhistas',
+        'informacoesTrabalhistas.departamento',
+        'informacoesTrabalhistas.cargo',
+        'horarios',
+      ],
       select: [
         'id',
         'nome',
@@ -111,9 +145,6 @@ export class UsuariosService {
         'telefone',
         'photoUrl',
         'cpf',
-        'cargoId',
-        'departamentoId',
-        'dataAdmissao',
         'papel',
         'status',
         'empresaId',
@@ -137,7 +168,13 @@ export class UsuariosService {
   async findByEmail(email: string): Promise<Usuario> {
     const usuario = await this.usuarioRepository.findOne({
       where: { email },
-      relations: ['empresa', 'departamento', 'cargo', 'horarios'],
+      relations: [
+        'empresa',
+        'informacoesTrabalhistas',
+        'informacoesTrabalhistas.departamento',
+        'informacoesTrabalhistas.cargo',
+        'horarios',
+      ],
     });
 
     if (!usuario) {
@@ -155,7 +192,13 @@ export class UsuariosService {
   async findByEmailWithPassword(email: string): Promise<Usuario> {
     const usuario = await this.usuarioRepository.findOne({
       where: { email },
-      relations: ['empresa', 'departamento', 'cargo', 'horarios'],
+      relations: [
+        'empresa',
+        'informacoesTrabalhistas',
+        'informacoesTrabalhistas.departamento',
+        'informacoesTrabalhistas.cargo',
+        'horarios',
+      ],
       select: [
         'id',
         'nome',
@@ -196,11 +239,68 @@ export class UsuariosService {
       );
     }
 
-    // Remover horariosFuncionario do DTO para não salvar no usuário
-    const { horariosFuncionario, ...usuarioData } = updateUsuarioDto;
+    // Separar dados do usuário e informações trabalhistas
+    const {
+      horariosFuncionario,
+      cargoId,
+      departamentoId,
+      dataAdmissao,
+      inicioRegistros,
+      cargaHorariaSemanal,
+      ...usuarioData
+    } = updateUsuarioDto;
 
+    // Atualizar dados do usuário
     Object.assign(usuario, usuarioData);
     const savedUsuario = await this.usuarioRepository.save(usuario);
+
+    // Atualizar informações trabalhistas se houver dados trabalhistas
+    if (
+      cargoId !== undefined ||
+      departamentoId !== undefined ||
+      dataAdmissao !== undefined ||
+      inicioRegistros !== undefined ||
+      cargaHorariaSemanal !== undefined
+    ) {
+      let informacoesTrabalhistas =
+        await this.informacoesTrabalhistasRepository.findOne({
+          where: { usuarioId: id },
+        });
+
+      if (!informacoesTrabalhistas) {
+        // Criar nova se não existir - requer todos os campos obrigatórios
+        if (cargoId && departamentoId && dataAdmissao && inicioRegistros) {
+          informacoesTrabalhistas =
+            this.informacoesTrabalhistasRepository.create({
+              usuarioId: id,
+              cargoId,
+              departamentoId,
+              dataAdmissao: new Date(dataAdmissao),
+              inicioRegistros: new Date(inicioRegistros),
+              cargaHorariaSemanal: cargaHorariaSemanal || 40,
+            });
+        } else {
+          throw new BadRequestException(
+            'Para criar informações trabalhistas são necessários: cargoId, departamentoId, dataAdmissao e inicioRegistros',
+          );
+        }
+      } else {
+        // Atualizar existente
+        if (cargoId !== undefined) informacoesTrabalhistas.cargoId = cargoId;
+        if (departamentoId !== undefined)
+          informacoesTrabalhistas.departamentoId = departamentoId;
+        if (dataAdmissao !== undefined)
+          informacoesTrabalhistas.dataAdmissao = new Date(dataAdmissao);
+        if (inicioRegistros !== undefined)
+          informacoesTrabalhistas.inicioRegistros = new Date(inicioRegistros);
+        if (cargaHorariaSemanal !== undefined)
+          informacoesTrabalhistas.cargaHorariaSemanal = cargaHorariaSemanal;
+      }
+
+      await this.informacoesTrabalhistasRepository.save(
+        informacoesTrabalhistas,
+      );
+    }
 
     // Processar e atualizar os horários do funcionário
     if (horariosFuncionario) {
@@ -228,7 +328,7 @@ export class UsuariosService {
       await this.horarioFuncionarioRepository.save(horariosToSave);
     }
 
-    // Retornar o usuário com os horários carregados
+    // Retornar o usuário com as informações trabalhistas e horários carregados
     return await this.findOne(id);
   }
 
@@ -250,7 +350,13 @@ export class UsuariosService {
         empresaId,
         papel: In(['administrador', 'funcionario']), // Excluir donos da empresa
       },
-      relations: ['empresa', 'departamento', 'horarios'],
+      relations: [
+        'empresa',
+        'informacoesTrabalhistas',
+        'informacoesTrabalhistas.departamento',
+        'informacoesTrabalhistas.cargo',
+        'horarios',
+      ],
       select: [
         'id',
         'nome',
@@ -258,9 +364,6 @@ export class UsuariosService {
         'telefone',
         'photoUrl',
         'cpf',
-        'cargoId',
-        'departamentoId',
-        'dataAdmissao',
         'papel',
         'status',
         'empresaId',
@@ -288,7 +391,13 @@ export class UsuariosService {
         empresaId,
         papel: 'funcionario' as any, // Apenas funcionários
       },
-      relations: ['empresa', 'departamento', 'cargo', 'horarios'],
+      relations: [
+        'empresa',
+        'informacoesTrabalhistas',
+        'informacoesTrabalhistas.departamento',
+        'informacoesTrabalhistas.cargo',
+        'horarios',
+      ],
       select: [
         'id',
         'nome',
@@ -296,9 +405,6 @@ export class UsuariosService {
         'telefone',
         'photoUrl',
         'cpf',
-        'cargoId',
-        'departamentoId',
-        'dataAdmissao',
         'papel',
         'status',
         'empresaId',

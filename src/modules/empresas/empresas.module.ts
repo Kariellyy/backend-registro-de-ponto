@@ -1,23 +1,23 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Usuario } from '../usuarios/entities/usuario.entity';
-import { CargosService } from './services/cargos.service';
+import { InformacoesTrabalhistas } from '../usuarios/entities/informacoes-trabalhistas.entity';
 import { CargosController } from './controllers/cargos.controller';
 import { DepartamentosController } from './controllers/departamentos.controller';
 import { EmpresasController } from './controllers/empresas.controller';
-import { DepartamentosService } from './services/departamentos.service';
-import { EmpresasService } from './services/empresas.service';
 import { Cargo } from './entities/cargo.entity';
 import { Departamento } from './entities/departamento.entity';
 import { Empresa } from './entities/empresa.entity';
 import { HorarioEmpresa } from './entities/horario-empresa.entity';
+import { CargosService } from './services/cargos.service';
+import { DepartamentosService } from './services/departamentos.service';
+import { EmpresasService } from './services/empresas.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       Empresa,
       Departamento,
-      Usuario,
+      InformacoesTrabalhistas,
       HorarioEmpresa,
       Cargo,
     ]),

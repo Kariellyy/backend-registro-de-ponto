@@ -38,5 +38,3 @@ export class CargosService {
     await this.cargoRepo.remove(cargo);
   }
 }
-
-

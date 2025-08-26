@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Usuario } from '../../usuarios/entities/usuario.entity';
+import { InformacoesTrabalhistas } from '../../usuarios/entities/informacoes-trabalhistas.entity';
 import { CreateDepartamentoDto } from '../dto/create-departamento.dto';
 import { UpdateDepartamentoDto } from '../dto/update-departamento.dto';
 import { Departamento } from '../entities/departamento.entity';
@@ -15,8 +15,8 @@ export class DepartamentosService {
   constructor(
     @InjectRepository(Departamento)
     private readonly departamentoRepository: Repository<Departamento>,
-    @InjectRepository(Usuario)
-    private readonly usuarioRepository: Repository<Usuario>,
+    @InjectRepository(InformacoesTrabalhistas)
+    private readonly informacoesTrabalhistasRepository: Repository<InformacoesTrabalhistas>,
   ) {}
 
   async create(
@@ -48,7 +48,7 @@ export class DepartamentosService {
   async findAllByEmpresa(empresaId: string): Promise<Departamento[]> {
     return await this.departamentoRepository.find({
       where: { empresaId },
-      relations: ['usuarios'],
+      relations: ['informacoesTrabalhistas', 'informacoesTrabalhistas.usuario'],
       order: { nome: 'ASC' },
     });
   }
@@ -56,7 +56,7 @@ export class DepartamentosService {
   async findOne(id: string, empresaId: string): Promise<Departamento> {
     const departamento = await this.departamentoRepository.findOne({
       where: { id, empresaId },
-      relations: ['usuarios'],
+      relations: ['informacoesTrabalhistas', 'informacoesTrabalhistas.usuario'],
     });
 
     if (!departamento) {
@@ -106,11 +106,11 @@ export class DepartamentosService {
     id: string,
     empresaId: string,
   ): Promise<boolean> {
-    const count = await this.usuarioRepository.count({
+    const count = await this.informacoesTrabalhistasRepository.count({
       where: {
         departamentoId: id,
-        empresaId,
       },
+      relations: ['usuario'],
     });
 
     return count > 0;

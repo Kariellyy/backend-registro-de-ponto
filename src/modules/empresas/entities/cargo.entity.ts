@@ -8,7 +8,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { Usuario } from '../../usuarios/entities/usuario.entity';
+import { InformacoesTrabalhistas } from '../../usuarios/entities/informacoes-trabalhistas.entity';
 import { Departamento } from './departamento.entity';
 
 @Entity('cargos')
@@ -40,8 +40,8 @@ export class Cargo {
   @JoinColumn({ name: 'departamento_id' })
   departamento: Departamento;
 
-  @OneToMany(() => Usuario, (usuario) => usuario.cargo)
-  usuarios: Usuario[];
+  @OneToMany(() => InformacoesTrabalhistas, (info) => info.cargo)
+  informacoesTrabalhistas: InformacoesTrabalhistas[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

@@ -8,9 +8,9 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { Usuario } from '../../usuarios/entities/usuario.entity';
-import { Empresa } from './empresa.entity';
+import { InformacoesTrabalhistas } from '../../usuarios/entities/informacoes-trabalhistas.entity';
 import { Cargo } from './cargo.entity';
+import { Empresa } from './empresa.entity';
 
 @Entity('departamentos')
 export class Departamento {
@@ -32,8 +32,8 @@ export class Departamento {
   @JoinColumn({ name: 'empresa_id' })
   empresa: Empresa;
 
-  @OneToMany(() => Usuario, (usuario) => usuario.departamento)
-  usuarios: Usuario[];
+  @OneToMany(() => InformacoesTrabalhistas, (info) => info.departamento)
+  informacoesTrabalhistas: InformacoesTrabalhistas[];
 
   @OneToMany(() => Cargo, (cargo) => cargo.departamento)
   cargos: Cargo[];

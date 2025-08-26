@@ -6,15 +6,15 @@ import {
   JoinColumn,
   ManyToOne,
   OneToMany,
+  OneToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { UserRole } from '../../../core/enums/user-role.enum';
 import { UserStatus } from '../../../core/enums/user-status.enum';
-import { Cargo } from '../../empresas/entities/cargo.entity';
-import { Departamento } from '../../empresas/entities/departamento.entity';
 import { Empresa } from '../../empresas/entities/empresa.entity';
 import { HorarioFuncionario } from './horario-funcionario.entity';
+import { InformacoesTrabalhistas } from './informacoes-trabalhistas.entity';
 
 @Entity('usuarios')
 export class Usuario {
@@ -39,33 +39,6 @@ export class Usuario {
   @Column({ type: 'varchar', length: 14, nullable: true })
   cpf: string;
 
-  @Column({ name: 'cargo_id', type: 'uuid', nullable: true })
-  cargoId: string;
-
-  @ManyToOne(() => Cargo, (cargo) => cargo.usuarios, { onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'cargo_id' })
-  cargo: Cargo;
-
-  @Column({ name: 'departamento_id', type: 'uuid', nullable: true })
-  departamentoId: string;
-
-  @Column({ type: 'date', nullable: true })
-  dataAdmissao: Date;
-
-  // Data a partir da qual os registros de ponto passam a ser considerados
-  @Column({ name: 'inicio_registros', type: 'date', nullable: true })
-  inicioRegistros: Date;
-
-  @Column({
-    name: 'carga_horaria_semanal',
-    type: 'decimal',
-    precision: 4,
-    scale: 2,
-    default: 40,
-    comment: 'Carga horária semanal contratual (calculada automaticamente)',
-  })
-  cargaHorariaSemanal: number;
-
   @Column({
     type: 'enum',
     enum: UserRole,
@@ -89,11 +62,10 @@ export class Usuario {
   @JoinColumn({ name: 'empresa_id' })
   empresa: Empresa;
 
-  @ManyToOne(() => Departamento, (departamento) => departamento.usuarios, {
-    onDelete: 'SET NULL',
+  @OneToOne(() => InformacoesTrabalhistas, (info) => info.usuario, {
+    cascade: true,
   })
-  @JoinColumn({ name: 'departamento_id' })
-  departamento: Departamento;
+  informacoesTrabalhistas: InformacoesTrabalhistas;
 
   @OneToMany(() => RegistroPonto, (registro) => registro.usuario)
   registrosPonto: RegistroPonto[];

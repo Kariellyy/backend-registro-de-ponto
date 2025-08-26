@@ -1,7 +1,7 @@
 import {
-    BadRequestException,
-    Injectable,
-    NotFoundException,
+  BadRequestException,
+  Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
@@ -12,9 +12,9 @@ import { Usuario } from '../usuarios/entities/usuario.entity';
 import { RegistrarPontoDto } from './dto/registrar-ponto.dto';
 import { RegistroPontoResponseDto } from './dto/registro-ponto-response.dto';
 import {
-    RegistroPonto,
-    StatusRegistro,
-    TipoRegistro,
+  RegistroPonto,
+  StatusRegistro,
+  TipoRegistro,
 } from './entities/registro-ponto.entity';
 
 @Injectable()
@@ -172,7 +172,12 @@ export class PontoService {
     // Buscar usuário e empresa
     const usuario = await this.usuarioRepository.findOne({
       where: { id: usuarioId },
-      relations: ['empresa', 'empresa.horarios', 'horarios'],
+      relations: [
+        'empresa',
+        'empresa.horarios',
+        'horarios',
+        'informacoesTrabalhistas',
+      ],
     });
 
     if (!usuario) {
@@ -184,8 +189,10 @@ export class PontoService {
 
     // Considerar data de admissão
     let dataInicioCalculo = dataInicio;
-    if (usuario.dataAdmissao) {
-      const dataAdmissao = new Date(usuario.dataAdmissao);
+    if (usuario.informacoesTrabalhistas?.dataAdmissao) {
+      const dataAdmissao = new Date(
+        usuario.informacoesTrabalhistas.dataAdmissao,
+      );
       if (dataAdmissao > dataInicio) {
         dataInicioCalculo = dataAdmissao;
       }
@@ -220,7 +227,8 @@ export class PontoService {
 
     // Calcular horas semanais
     const semanasTrabalhadas = this.calcularSemanas(dataInicioCalculo, dataFim);
-    const horasSemanais = usuario.cargaHorariaSemanal || 40;
+    const horasSemanais =
+      usuario.informacoesTrabalhistas?.cargaHorariaSemanal || 40;
 
     // Calcular saldo do mês
     const saldoMes = horasTrabalhadas - horasPrevistas;
