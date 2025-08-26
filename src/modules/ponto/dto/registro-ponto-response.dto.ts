@@ -12,6 +12,7 @@ export class RegistroPontoResponseDto {
   longitude?: number;
   dentroDoRaio: boolean;
   observacoes?: string;
+  temJustificativaPendente: boolean;
   createdAt: Date;
   mensagem?: string; // Mensagem informativa sobre o status
   usuario: {

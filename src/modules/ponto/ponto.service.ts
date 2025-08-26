@@ -128,6 +128,7 @@ export class PontoService {
     const query = this.registroPontoRepository
       .createQueryBuilder('registro')
       .leftJoinAndSelect('registro.usuario', 'usuario')
+      .leftJoinAndSelect('registro.justificativas', 'justificativas')
       .where('registro.usuarioId = :usuarioId', { usuarioId })
       .orderBy('registro.dataHora', 'DESC');
 
@@ -150,7 +151,7 @@ export class PontoService {
   ): Promise<RegistroPontoResponseDto | null> {
     const registro = await this.registroPontoRepository.findOne({
       where: { usuarioId },
-      relations: ['usuario'],
+      relations: ['usuario', 'justificativas'],
       order: { dataHora: 'DESC' },
     });
 
@@ -640,6 +641,7 @@ export class PontoService {
       longitude: registro.longitude,
       dentroDoRaio: registro.dentroDoRaio,
       observacoes: registro.observacoes,
+      temJustificativaPendente: registro.temJustificativaPendente,
       createdAt: registro.createdAt,
       usuario: {
         id: usuario.id,
