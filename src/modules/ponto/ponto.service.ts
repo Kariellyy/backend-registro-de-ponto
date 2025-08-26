@@ -168,6 +168,7 @@ export class PontoService {
     diasUteis: number;
     horasSemanais: number;
     semanasTrabalhadas: number;
+    dataCalculoAte: Date;
   }> {
     // Buscar usuário e empresa
     const usuario = await this.usuarioRepository.findOne({
@@ -187,14 +188,14 @@ export class PontoService {
     const dataInicio = new Date(ano, mes - 1, 1);
     const dataFim = new Date(ano, mes, 0, 23, 59, 59);
 
-    // Considerar data de admissão
+    // Considerar data de início dos registros
     let dataInicioCalculo = dataInicio;
-    if (usuario.informacoesTrabalhistas?.dataAdmissao) {
-      const dataAdmissao = new Date(
-        usuario.informacoesTrabalhistas.dataAdmissao,
+    if (usuario.informacoesTrabalhistas?.inicioRegistros) {
+      const dataInicioRegistros = new Date(
+        usuario.informacoesTrabalhistas.inicioRegistros,
       );
-      if (dataAdmissao > dataInicio) {
-        dataInicioCalculo = dataAdmissao;
+      if (dataInicioRegistros > dataInicio) {
+        dataInicioCalculo = dataInicioRegistros;
       }
     }
 
@@ -210,23 +211,28 @@ export class PontoService {
     // Calcular horas trabalhadas considerando intervalos
     const horasTrabalhadas = this.calcularHorasTrabalhadasPorDia(registros);
 
-    // Calcular horas previstas baseadas na configuração do usuário/empresa
+    // Calcular horas previstas apenas até hoje (ExpectedUntilToday)
+    const hoje = new Date();
+    const dataFimCalculo = hoje < dataFim ? hoje : dataFim;
     const horasPrevistas = this.calcularHorasPrevisasNovas(
       dataInicioCalculo,
-      dataFim,
+      dataFimCalculo,
       usuario,
     );
 
-    // Calcular dias trabalhados e úteis
+    // Calcular dias trabalhados e úteis (apenas até hoje)
     const diasTrabalhados = this.calcularDiasTrabalhados(registros);
     const diasUteis = this.calcularDiasUteisDoUsuario(
       dataInicioCalculo,
-      dataFim,
+      dataFimCalculo,
       usuario,
     );
 
-    // Calcular horas semanais
-    const semanasTrabalhadas = this.calcularSemanas(dataInicioCalculo, dataFim);
+    // Calcular horas semanais (apenas até hoje)
+    const semanasTrabalhadas = this.calcularSemanas(
+      dataInicioCalculo,
+      dataFimCalculo,
+    );
     const horasSemanais =
       usuario.informacoesTrabalhistas?.cargaHorariaSemanal || 40;
 
@@ -236,6 +242,7 @@ export class PontoService {
     // Calcular saldo total (todos os meses anteriores)
     const saldoTotal = await this.calcularSaldoTotal(
       usuarioId,
+      usuario,
       dataInicioCalculo,
     );
 
@@ -248,6 +255,7 @@ export class PontoService {
       diasUteis,
       horasSemanais,
       semanasTrabalhadas,
+      dataCalculoAte: dataFimCalculo,
     };
   }
 
@@ -579,32 +587,38 @@ export class PontoService {
 
   private async calcularSaldoTotal(
     usuarioId: string,
+    usuario: Usuario,
     dataLimite: Date,
   ): Promise<number> {
+    // Determinar data de início dos registros
+    let dataInicioRegistros = new Date(0); // Fallback para início dos tempos
+    if (usuario.informacoesTrabalhistas?.inicioRegistros) {
+      dataInicioRegistros = new Date(
+        usuario.informacoesTrabalhistas.inicioRegistros,
+      );
+    }
+
     const registros = await this.registroPontoRepository.find({
       where: {
         usuarioId,
-        dataHora: Between(new Date(0), dataLimite),
+        dataHora: Between(dataInicioRegistros, dataLimite),
         status: StatusRegistro.APROVADO,
       },
       order: { dataHora: 'ASC' },
     });
 
-    let saldoTotal = 0;
-    let entrada: Date | null = null;
+    // Calcular saldo total usando a mesma lógica detalhada
+    const horasTrabalhadasTotal =
+      this.calcularHorasTrabalhadasPorDia(registros);
 
-    for (const registro of registros) {
-      if (registro.tipo === TipoRegistro.ENTRADA) {
-        entrada = registro.dataHora;
-      } else if (registro.tipo === TipoRegistro.SAIDA && entrada) {
-        const diffMs = registro.dataHora.getTime() - entrada.getTime();
-        const horasTrabalhadas = diffMs / (1000 * 60 * 60);
-        saldoTotal += horasTrabalhadas - 8; // 8 horas por dia
-        entrada = null;
-      }
-    }
+    // Calcular horas previstas desde o início dos registros até a data limite
+    const horasPrevisasTotal = this.calcularHorasPrevisasNovas(
+      dataInicioRegistros,
+      dataLimite,
+      usuario,
+    );
 
-    return saldoTotal;
+    return horasTrabalhadasTotal - horasPrevisasTotal;
   }
 
   private formatarResposta(
