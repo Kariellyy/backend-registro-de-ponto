@@ -1,13 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Patch,
-  Post,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -63,17 +54,5 @@ export class PontoController {
     }
 
     return this.pontoService.calcularBancoHoras(user.id, mesNum, anoNum);
-  }
-
-  @Patch('registros/:id/justificativa')
-  async atualizarRegistroComJustificativa(
-    @Param('id') registroId: string,
-    @Body() body: { observacoes: string },
-    @CurrentUser() user: Usuario,
-  ) {
-    return this.pontoService.atualizarRegistroComJustificativa(
-      registroId,
-      body.observacoes,
-    );
   }
 }
