@@ -47,6 +47,10 @@ export class Usuario {
   @Column({ type: 'date', nullable: true })
   dataAdmissao: Date;
 
+  // Data a partir da qual os registros de ponto passam a ser considerados
+  @Column({ name: 'inicio_registros', type: 'date', nullable: true })
+  inicioRegistros: Date;
+
   @Column({
     name: 'carga_horaria_semanal',
     type: 'decimal',

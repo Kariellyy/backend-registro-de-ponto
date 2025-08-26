@@ -1,4 +1,7 @@
-import { TipoRegistro, StatusRegistro } from '../entities/registro-ponto.entity';
+import {
+  StatusRegistro,
+  TipoRegistro,
+} from '../entities/registro-ponto.entity';
 
 export class RegistroPontoResponseDto {
   id: string;
@@ -10,6 +13,7 @@ export class RegistroPontoResponseDto {
   dentroDoRaio: boolean;
   observacoes?: string;
   createdAt: Date;
+  mensagem?: string; // Mensagem informativa sobre o status
   usuario: {
     id: string;
     nome: string;

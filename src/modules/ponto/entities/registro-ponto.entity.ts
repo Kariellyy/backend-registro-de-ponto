@@ -19,6 +19,7 @@ export enum TipoRegistro {
 export enum StatusRegistro {
   APROVADO = 'aprovado',
   PENDENTE = 'pendente',
+  JUSTIFICADO = 'justificado',
   REJEITADO = 'rejeitado',
 }
 

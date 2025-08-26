@@ -49,6 +49,13 @@ export class CreateUsuarioDto {
   dataAdmissao?: string;
 
   @IsOptional()
+  @IsDateString(
+    {},
+    { message: 'Início dos registros deve ser uma data válida' },
+  )
+  inicioRegistros?: string;
+
+  @IsOptional()
   horariosFuncionario?: {
     [diaSemana: string]: {
       ativo: boolean;

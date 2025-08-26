@@ -35,7 +35,7 @@ export class PontoService {
     // Buscar usuário
     const usuario = await this.usuarioRepository.findOne({
       where: { id: usuarioId },
-      relations: ['empresa'],
+      relations: ['empresa', 'empresa.horarios', 'horarios'],
     });
 
     if (!usuario) {
@@ -72,11 +72,15 @@ export class PontoService {
         usuarioId,
         dataHora: Between(inicioDia, fimDia),
       },
-      order: { dataHora: 'DESC' },
+      order: { dataHora: 'ASC' },
     });
 
     // Validar sequência de registros
-    this.validarSequenciaRegistros(registrarPontoDto.tipo, registrosHoje);
+    this.validarSequenciaRegistros(
+      registrarPontoDto.tipo,
+      registrosHoje,
+      usuario,
+    );
 
     // Validar geolocalização
     let dentroDoRaio = true;
@@ -91,10 +95,11 @@ export class PontoService {
     }
 
     // Verificar se empresa permite registro fora do raio
+    // Se não permitir e estiver fora do raio, o registro será criado como PENDENTE
+    // e o usuário deve fornecer justificativa
     if (!dentroDoRaio && !empresa.permitirRegistroForaRaio) {
-      throw new BadRequestException(
-        'Registro de ponto não permitido fora do raio da empresa',
-      );
+      // Não lançar erro, apenas marcar como fora do raio
+      // O registro será criado com status PENDENTE
     }
 
     // Criar registro
@@ -155,6 +160,28 @@ export class PontoService {
     return this.formatarResposta(registro, registro.usuario);
   }
 
+  async atualizarRegistroComJustificativa(
+    registroId: string,
+    observacoes: string,
+  ): Promise<RegistroPontoResponseDto> {
+    const registro = await this.registroPontoRepository.findOne({
+      where: { id: registroId },
+      relations: ['usuario'],
+    });
+
+    if (!registro) {
+      throw new NotFoundException('Registro não encontrado');
+    }
+
+    registro.observacoes = observacoes;
+    // Marcar como justificado
+    registro.status = StatusRegistro.JUSTIFICADO;
+    const registroAtualizado =
+      await this.registroPontoRepository.save(registro);
+
+    return this.formatarResposta(registroAtualizado, registro.usuario);
+  }
+
   async calcularBancoHoras(
     usuarioId: string,
     mes: number,
@@ -191,10 +218,15 @@ export class PontoService {
       }
     }
 
+    // Respeitar data de início dos registros do usuário, se houver
+    const inicioConsiderado = usuario.inicioRegistros
+      ? new Date(usuario.inicioRegistros)
+      : dataInicioCalculo;
+
     const registros = await this.registroPontoRepository.find({
       where: {
         usuarioId,
-        dataHora: Between(dataInicioCalculo, dataFim),
+        dataHora: Between(inicioConsiderado, dataFim),
         status: StatusRegistro.APROVADO,
       },
       order: { dataHora: 'ASC' },
@@ -246,6 +278,7 @@ export class PontoService {
   private validarSequenciaRegistros(
     tipo: TipoRegistro,
     registrosHoje: RegistroPonto[],
+    usuario: Usuario,
   ): void {
     // Verificar se já existe registro do mesmo tipo hoje
     const jaRegistrado = registrosHoje.some(
@@ -257,11 +290,15 @@ export class PontoService {
       );
     }
 
-    // Verificar se todos os registros do dia estão completos (máximo 4 registros)
-    if (registrosHoje.length >= 4) {
-      throw new BadRequestException(
-        'Todos os registros do dia já foram feitos (entrada, intervalo início, intervalo fim, saída)',
-      );
+    // Verificar se todos os registros do dia estão completos
+    const temIntervalo = this.usuarioTemIntervalo(usuario);
+    const maxRegistros = temIntervalo ? 4 : 2; // Com intervalo: 4 registros, sem intervalo: 2 registros
+
+    if (registrosHoje.length >= maxRegistros) {
+      const mensagem = temIntervalo
+        ? 'Todos os registros do dia já foram feitos (entrada, intervalo início, intervalo fim, saída)'
+        : 'Todos os registros do dia já foram feitos (entrada, saída)';
+      throw new BadRequestException(mensagem);
     }
 
     // Validar sequência baseada no primeiro registro (sem registros)
@@ -274,10 +311,11 @@ export class PontoService {
       return;
     }
 
-    // Validar sequência baseada no último registro
+    // Validar sequência baseada no último registro (último da lista pois está ordenado ASC)
     const ultimoRegistro = registrosHoje[registrosHoje.length - 1];
     const proximoTipoEsperado = this.obterProximoTipoEsperado(
       ultimoRegistro.tipo,
+      usuario,
     );
 
     if (tipo !== proximoTipoEsperado) {
@@ -287,10 +325,19 @@ export class PontoService {
     }
   }
 
-  private obterProximoTipoEsperado(tipoAtual: TipoRegistro): TipoRegistro {
+  private obterProximoTipoEsperado(
+    tipoAtual: TipoRegistro,
+    usuario: Usuario,
+  ): TipoRegistro {
+    // Verificar se o usuário tem intervalo configurado
+    const temIntervalo = this.usuarioTemIntervalo(usuario);
+
     switch (tipoAtual) {
       case TipoRegistro.ENTRADA:
-        return TipoRegistro.INTERVALO_INICIO;
+        // Se tem intervalo, próximo é início do intervalo, senão é saída
+        return temIntervalo
+          ? TipoRegistro.INTERVALO_INICIO
+          : TipoRegistro.SAIDA;
       case TipoRegistro.INTERVALO_INICIO:
         return TipoRegistro.INTERVALO_FIM;
       case TipoRegistro.INTERVALO_FIM:
@@ -299,6 +346,46 @@ export class PontoService {
         throw new BadRequestException(
           'Todos os registros do dia já foram completados',
         );
+    }
+  }
+
+  private usuarioTemIntervalo(usuario: Usuario): boolean {
+    const hoje = new Date();
+    const diaSemana = hoje.getDay();
+
+    try {
+      // Priorizar horários individuais do funcionário
+      if (usuario.horarios && usuario.horarios.length > 0) {
+        const horariosFuncionario = this.converterHorariosFuncionario(
+          usuario.horarios,
+        );
+
+        if (horariosFuncionario[diaSemana.toString()]) {
+          const horario = horariosFuncionario[diaSemana.toString()];
+          return horario.ativo && horario.temIntervalo;
+        }
+      }
+
+      // Fallback para horários da empresa
+      if (
+        usuario.empresa &&
+        usuario.empresa.horarios &&
+        usuario.empresa.horarios.length > 0
+      ) {
+        const horariosEmpresa = this.converterHorariosEmpresa(
+          usuario.empresa.horarios,
+        );
+
+        if (horariosEmpresa[diaSemana.toString()]) {
+          const horario = horariosEmpresa[diaSemana.toString()];
+          return horario.ativo && horario.temIntervalo;
+        }
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Erro ao verificar intervalo do usuário:', error);
+      return false;
     }
   }
 
@@ -603,6 +690,19 @@ export class PontoService {
     registro: RegistroPonto,
     usuario: Usuario,
   ): RegistroPontoResponseDto {
+    let mensagem: string | undefined;
+
+    if (registro.status === StatusRegistro.PENDENTE && !registro.dentroDoRaio) {
+      mensagem =
+        'Registro realizado fora do raio permitido. Aguardando aprovação.';
+    } else if (registro.status === StatusRegistro.APROVADO) {
+      mensagem = 'Registro aprovado com sucesso.';
+    } else if (registro.status === StatusRegistro.JUSTIFICADO) {
+      mensagem = 'Justificativa enviada. Aguardando avaliação.';
+    } else if (registro.status === StatusRegistro.PENDENTE) {
+      mensagem = 'Registro pendente de aprovação.';
+    }
+
     return {
       id: registro.id,
       tipo: registro.tipo,
@@ -613,6 +713,7 @@ export class PontoService {
       dentroDoRaio: registro.dentroDoRaio,
       observacoes: registro.observacoes,
       createdAt: registro.createdAt,
+      mensagem,
       usuario: {
         id: usuario.id,
         nome: usuario.nome,
