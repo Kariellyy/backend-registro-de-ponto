@@ -65,6 +65,15 @@ export class InformacoesTrabalhistas {
   })
   cargaHorariaSemanal: number;
 
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    comment: 'Salário do funcionário',
+  })
+  salario: number | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

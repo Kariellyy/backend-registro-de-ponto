@@ -74,6 +74,7 @@ export class UsuariosService {
       dataAdmissao,
       inicioRegistros,
       cargaHorariaSemanal,
+      salario,
       ...usuarioData
     } = createUsuarioDto;
 
@@ -95,6 +96,7 @@ export class UsuariosService {
           dataAdmissao: new Date(dataAdmissao),
           inicioRegistros: new Date(inicioRegistros),
           cargaHorariaSemanal: cargaHorariaSemanal || 40,
+          salario: salario || null,
         });
 
       await this.informacoesTrabalhistasRepository.save(
@@ -247,6 +249,7 @@ export class UsuariosService {
       dataAdmissao,
       inicioRegistros,
       cargaHorariaSemanal,
+      salario,
       ...usuarioData
     } = updateUsuarioDto;
 
@@ -260,7 +263,8 @@ export class UsuariosService {
       departamentoId !== undefined ||
       dataAdmissao !== undefined ||
       inicioRegistros !== undefined ||
-      cargaHorariaSemanal !== undefined
+      cargaHorariaSemanal !== undefined ||
+      salario !== undefined
     ) {
       let informacoesTrabalhistas =
         await this.informacoesTrabalhistasRepository.findOne({
@@ -278,6 +282,7 @@ export class UsuariosService {
               dataAdmissao: new Date(dataAdmissao),
               inicioRegistros: new Date(inicioRegistros),
               cargaHorariaSemanal: cargaHorariaSemanal || 40,
+              salario: salario || null,
             });
         } else {
           throw new BadRequestException(
@@ -295,6 +300,7 @@ export class UsuariosService {
           informacoesTrabalhistas.inicioRegistros = new Date(inicioRegistros);
         if (cargaHorariaSemanal !== undefined)
           informacoesTrabalhistas.cargaHorariaSemanal = cargaHorariaSemanal;
+        if (salario !== undefined) informacoesTrabalhistas.salario = salario;
       }
 
       await this.informacoesTrabalhistasRepository.save(

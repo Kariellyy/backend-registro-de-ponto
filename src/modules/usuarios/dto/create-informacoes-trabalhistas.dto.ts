@@ -19,4 +19,8 @@ export class CreateInformacoesTrabalhistasDto {
   @IsOptional()
   @IsNumber({}, { message: 'Carga horária semanal deve ser um número' })
   cargaHorariaSemanal?: number;
+
+  @IsOptional()
+  @IsNumber({}, { message: 'Salário deve ser um número' })
+  salario?: number | null;
 }
