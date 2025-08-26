@@ -90,11 +90,16 @@ export class PontoService {
         ) <= empresa.raioPermitido;
     }
 
-    // Verificar se empresa permite registro fora do raio
-    if (!dentroDoRaio && !empresa.permitirRegistroForaRaio) {
-      throw new BadRequestException(
-        'Registro de ponto não permitido fora do raio da empresa',
-      );
+    // Determinar status baseado na configuração da empresa
+    let status = StatusRegistro.APROVADO;
+    if (!dentroDoRaio) {
+      // Se a empresa exige justificativa para registros fora do raio
+      if (empresa.exigirJustificativaForaRaio) {
+        status = StatusRegistro.PENDENTE;
+      } else {
+        // Se não exige justificativa, aprova automaticamente
+        status = StatusRegistro.APROVADO;
+      }
     }
 
     // Criar registro
@@ -106,7 +111,8 @@ export class PontoService {
       longitude: registrarPontoDto.longitude,
       dentroDoRaio,
       observacoes: registrarPontoDto.observacoes,
-      status: dentroDoRaio ? StatusRegistro.APROVADO : StatusRegistro.PENDENTE,
+      status,
+      temJustificativaPendente: false,
     });
 
     const registroSalvo = await this.registroPontoRepository.save(registro);

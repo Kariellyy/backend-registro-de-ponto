@@ -4,10 +4,12 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { Usuario } from '../../usuarios/entities/usuario.entity';
+import { Justificativa } from './justificativa.entity';
 
 export enum TipoRegistro {
   ENTRADA = 'entrada',
@@ -84,12 +86,26 @@ export class RegistroPonto {
   })
   observacoes: string;
 
+  // Campo para indicar se tem justificativa pendente
+  @Column({
+    name: 'tem_justificativa_pendente',
+    type: 'boolean',
+    default: false,
+  })
+  temJustificativaPendente: boolean;
+
   // Relacionamentos
   @ManyToOne(() => Usuario, (usuario) => usuario.registrosPonto, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'usuario_id' })
   usuario: Usuario;
+
+  @OneToMany(
+    () => Justificativa,
+    (justificativa) => justificativa.registroPonto,
+  )
+  justificativas: Justificativa[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

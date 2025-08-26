@@ -62,10 +62,6 @@ export class CreateEmpresaDto {
 
   // Configurações de flexibilidade
   @IsOptional()
-  @IsBoolean({ message: 'Permitir registro fora do raio deve ser um booleano' })
-  permitirRegistroForaRaio?: boolean;
-
-  @IsOptional()
   @IsBoolean({
     message: 'Exigir justificativa fora do raio deve ser um booleano',
   })

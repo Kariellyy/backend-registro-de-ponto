@@ -88,14 +88,6 @@ export class Empresa {
 
   // Configurações de flexibilidade
   @Column({
-    name: 'permitir_registro_fora_raio',
-    type: 'boolean',
-    default: false,
-    comment: 'Permite registro de ponto fora do raio da empresa',
-  })
-  permitirRegistroForaRaio: boolean;
-
-  @Column({
     name: 'exigir_justificativa_fora_raio',
     type: 'boolean',
     default: true,
