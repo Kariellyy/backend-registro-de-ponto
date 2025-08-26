@@ -9,12 +9,12 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { JwtPayload } from '../auth/interfaces/auth.interface';
-import { DepartamentosService } from './departamentos.service';
-import { CreateDepartamentoDto } from './dto/create-departamento.dto';
-import { UpdateDepartamentoDto } from './dto/update-departamento.dto';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { JwtPayload } from '../../auth/interfaces/auth.interface';
+import { CreateDepartamentoDto } from '../dto/create-departamento.dto';
+import { UpdateDepartamentoDto } from '../dto/update-departamento.dto';
+import { DepartamentosService } from '../services/departamentos.service';
 
 @Controller('departamentos')
 @UseGuards(JwtAuthGuard)

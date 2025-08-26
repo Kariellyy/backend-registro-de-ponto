@@ -1,6 +1,16 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { CargosService } from './cargos.service';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { CargosService } from '../services/cargos.service';
 
 @Controller('cargos')
 @UseGuards(JwtAuthGuard)
@@ -32,5 +42,3 @@ export class CargosController {
     return this.cargosService.remove(id);
   }
 }
-
-

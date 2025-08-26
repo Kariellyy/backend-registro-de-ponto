@@ -5,11 +5,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CreateEmpresaDto } from './dto/create-empresa.dto';
-import { CreateHorarioEmpresaDto } from './dto/horario-empresa.dto';
-import { UpdateEmpresaDto } from './dto/update-empresa.dto';
-import { Empresa } from './entities/empresa.entity';
-import { HorarioEmpresa } from './entities/horario-empresa.entity';
+import { CreateEmpresaDto } from '../dto/create-empresa.dto';
+import { CreateHorarioEmpresaDto } from '../dto/horario-empresa.dto';
+import { UpdateEmpresaDto } from '../dto/update-empresa.dto';
+import { Empresa } from '../entities/empresa.entity';
+import { HorarioEmpresa } from '../entities/horario-empresa.entity';
 
 @Injectable()
 export class EmpresasService {

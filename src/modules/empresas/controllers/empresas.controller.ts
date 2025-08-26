@@ -9,13 +9,13 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { Public } from '../../common/decorators/public.decorator';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { JwtPayload } from '../auth/interfaces/auth.interface';
-import { CreateEmpresaDto } from './dto/create-empresa.dto';
-import { UpdateEmpresaDto } from './dto/update-empresa.dto';
-import { EmpresasService } from './empresas.service';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { Public } from '../../../common/decorators/public.decorator';
+import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { JwtPayload } from '../../auth/interfaces/auth.interface';
+import { CreateEmpresaDto } from '../dto/create-empresa.dto';
+import { UpdateEmpresaDto } from '../dto/update-empresa.dto';
+import { EmpresasService } from '../services/empresas.service';
 
 @Controller('empresas')
 @UseGuards(JwtAuthGuard)
