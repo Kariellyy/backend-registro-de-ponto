@@ -277,6 +277,16 @@ export class PontoService {
       usuario,
     );
 
+    console.log(
+      `[CALCULO_BANCO_HORAS] Período de cálculo para horas justificadas:`,
+    );
+    console.log(
+      `  - Data início cálculo: ${dataInicioCalculo.toISOString().split('T')[0]}`,
+    );
+    console.log(
+      `  - Data fim cálculo: ${dataFimCalculo.toISOString().split('T')[0]}`,
+    );
+
     // Calcular horas justificadas baseadas em faltas aprovadas
     const horasJustificadas = await this.calcularHorasJustificadas(
       usuarioId,
@@ -538,14 +548,51 @@ export class PontoService {
   }
 
   private calcularHorasDiaPrevistas(diaSemana: number, usuario: any): number {
+    const diasSemana = [
+      'Domingo',
+      'Segunda',
+      'Terça',
+      'Quarta',
+      'Quinta',
+      'Sexta',
+      'Sábado',
+    ];
+    const diaSemanaNome = diasSemana[diaSemana];
+
+    console.log(
+      `[CALCULO_HORAS_DIA] Calculando horas para ${diaSemanaNome} (dia ${diaSemana})`,
+    );
+    console.log(
+      `[CALCULO_HORAS_DIA] Usuário tem horários individuais: ${usuario.horarios && usuario.horarios.length > 0 ? 'SIM' : 'NÃO'}`,
+    );
+    console.log(
+      `[CALCULO_HORAS_DIA] Usuário tem horários da empresa: ${usuario.empresa?.horarios && usuario.empresa.horarios.length > 0 ? 'SIM' : 'NÃO'}`,
+    );
+
     // Priorizar horários individuais do funcionário
     if (usuario.horarios && usuario.horarios.length > 0) {
       const horarioFuncionario = usuario.horarios.find(
         (h) => h.diaSemana === diaSemana,
       );
 
+      console.log(
+        `[CALCULO_HORAS_DIA] Horário funcionário encontrado: ${horarioFuncionario ? 'SIM' : 'NÃO'}`,
+      );
+      if (horarioFuncionario) {
+        console.log(
+          `[CALCULO_HORAS_DIA] Horário funcionário ativo: ${horarioFuncionario.ativo ? 'SIM' : 'NÃO'}`,
+        );
+        console.log(
+          `[CALCULO_HORAS_DIA] Horário funcionário: ${horarioFuncionario.horarioInicio} - ${horarioFuncionario.horarioFim}`,
+        );
+      }
+
       if (horarioFuncionario && horarioFuncionario.ativo) {
-        return this.calcularHorasHorario(horarioFuncionario);
+        const horas = this.calcularHorasHorario(horarioFuncionario);
+        console.log(
+          `[CALCULO_HORAS_DIA] Usando horário funcionário: ${horas}h`,
+        );
+        return horas;
       }
     }
 
@@ -555,20 +602,50 @@ export class PontoService {
         (h) => h.diaSemana === diaSemana,
       );
 
+      console.log(
+        `[CALCULO_HORAS_DIA] Horário empresa encontrado: ${horarioEmpresa ? 'SIM' : 'NÃO'}`,
+      );
+      if (horarioEmpresa) {
+        console.log(
+          `[CALCULO_HORAS_DIA] Horário empresa ativo: ${horarioEmpresa.ativo ? 'SIM' : 'NÃO'}`,
+        );
+        console.log(
+          `[CALCULO_HORAS_DIA] Horário empresa: ${horarioEmpresa.horarioInicio} - ${horarioEmpresa.horarioFim}`,
+        );
+      }
+
       if (horarioEmpresa && horarioEmpresa.ativo) {
-        return this.calcularHorasHorario(horarioEmpresa);
+        const horas = this.calcularHorasHorario(horarioEmpresa);
+        console.log(`[CALCULO_HORAS_DIA] Usando horário empresa: ${horas}h`);
+        return horas;
       }
     }
 
+    console.log(
+      `[CALCULO_HORAS_DIA] Nenhum horário encontrado para ${diaSemanaNome}: 0h`,
+    );
     return 0;
   }
 
   private calcularHorasHorario(horario: any): number {
-    if (!horario.horarioInicio || !horario.horarioFim) return 0;
+    console.log(
+      `[CALCULO_HORAS_HORARIO] Iniciando cálculo para horário: ${horario.horarioInicio} - ${horario.horarioFim}`,
+    );
+
+    if (!horario.horarioInicio || !horario.horarioFim) {
+      console.log(
+        `[CALCULO_HORAS_HORARIO] Horário incompleto: início=${horario.horarioInicio}, fim=${horario.horarioFim}`,
+      );
+      return 0;
+    }
 
     const inicio = this.parseHorario(horario.horarioInicio);
     const fim = this.parseHorario(horario.horarioFim);
     let horasTotal = fim - inicio;
+
+    console.log(
+      `[CALCULO_HORAS_HORARIO] Cálculo básico: ${horario.horarioInicio} (${inicio}h) até ${horario.horarioFim} (${fim}h) = ${horasTotal}h`,
+    );
 
     // Descontar intervalo se existir
     if (
@@ -580,8 +657,14 @@ export class PontoService {
       const intervaloFim = this.parseHorario(horario.intervaloFim);
       const horasIntervalo = intervaloFim - intervaloInicio;
       horasTotal -= horasIntervalo;
+      console.log(
+        `[CALCULO_HORAS_HORARIO] Descontando intervalo: ${horario.intervaloInicio} até ${horario.intervaloFim} = ${horasIntervalo}h`,
+      );
     }
 
+    console.log(
+      `[CALCULO_HORAS_HORARIO] Horas totais calculadas: ${horasTotal}h`,
+    );
     return horasTotal;
   }
 
@@ -817,6 +900,8 @@ export class PontoService {
     aprovadorId: string,
     aprovarFaltaDto: AprovarFaltaDto,
   ): Promise<FaltaResponseDto> {
+    console.log(`[APROVAR_FALTA] Iniciando aprovação da falta ${faltaId}`);
+
     const falta = await this.faltaRepository.findOne({
       where: { id: faltaId },
       relations: ['usuario'],
@@ -825,6 +910,12 @@ export class PontoService {
     if (!falta) {
       throw new NotFoundException('Falta não encontrada');
     }
+
+    console.log(`[APROVAR_FALTA] Falta encontrada:`);
+    console.log(`  - Data: ${falta.data.toISOString().split('T')[0]}`);
+    console.log(`  - Tipo: ${falta.tipo}`);
+    console.log(`  - Status atual: ${falta.status}`);
+    console.log(`  - Usuário: ${falta.usuario.nome}`);
 
     if (falta.status !== StatusFalta.PENDENTE) {
       throw new BadRequestException('Falta já foi processada');
@@ -836,6 +927,10 @@ export class PontoService {
     falta.observacoes = aprovarFaltaDto.observacoes || null;
 
     const faltaAtualizada = await this.faltaRepository.save(falta);
+
+    console.log(
+      `[APROVAR_FALTA] Falta aprovada com sucesso. Status: ${faltaAtualizada.status}`,
+    );
 
     return this.formatarRespostaFalta(faltaAtualizada, falta.usuario);
   }
@@ -1030,6 +1125,13 @@ export class PontoService {
     dataFim: Date,
     usuario: Usuario,
   ): Promise<number> {
+    console.log(
+      `[CALCULO_HORAS_JUSTIFICADAS] Iniciando cálculo para usuário ${usuarioId}`,
+    );
+    console.log(
+      `[CALCULO_HORAS_JUSTIFICADAS] Período: ${dataInicio.toISOString().split('T')[0]} até ${dataFim.toISOString().split('T')[0]}`,
+    );
+
     // Buscar faltas aprovadas no período
     const faltasAprovadas = await this.faltaRepository.find({
       where: {
@@ -1039,11 +1141,34 @@ export class PontoService {
       },
     });
 
+    console.log(
+      `[CALCULO_HORAS_JUSTIFICADAS] Encontradas ${faltasAprovadas.length} faltas aprovadas`,
+    );
+
     let horasJustificadas = 0;
+    const diasSemana = [
+      'Domingo',
+      'Segunda',
+      'Terça',
+      'Quarta',
+      'Quinta',
+      'Sexta',
+      'Sábado',
+    ];
 
     for (const falta of faltasAprovadas) {
-      const dataFalta = new Date(falta.data);
+      // Converter string de data para Date local
+      const dataFalta = this.parseDateLocal(falta.data);
       const diaSemana = dataFalta.getDay();
+      const diaSemanaNome = diasSemana[diaSemana];
+
+      console.log(`[CALCULO_HORAS_JUSTIFICADAS] Analisando falta ${falta.id}:`);
+      console.log(`  - Data original: ${falta.data}`);
+      console.log(
+        `  - Data convertida: ${dataFalta.toISOString().split('T')[0]} (${diaSemanaNome})`,
+      );
+      console.log(`  - Tipo: ${falta.tipo}`);
+      console.log(`  - Status: ${falta.status}`);
 
       // Calcular horas que deveriam ser trabalhadas neste dia
       const horasDiaPrevistas = this.calcularHorasDiaPrevistas(
@@ -1051,12 +1176,24 @@ export class PontoService {
         usuario,
       );
 
+      console.log(
+        `  - Horas previstas para ${diaSemanaNome}: ${horasDiaPrevistas}h`,
+      );
+      
+      // Verificar se é sábado e se está sendo calculado corretamente
+      if (diaSemana === 6) {
+        console.log(`[CALCULO_HORAS_JUSTIFICADAS] ⚠️ SÁBADO DETECTADO! Data: ${falta.data} - Horas previstas: ${horasDiaPrevistas}h`);
+      }
+
       // Para faltas completas, considerar todas as horas do dia
       if (
         falta.tipo === TipoFalta.FALTA_JUSTIFICADA ||
         falta.tipo === TipoFalta.FALTA_INJUSTIFICADA
       ) {
         horasJustificadas += horasDiaPrevistas;
+        console.log(
+          `  - Falta completa: +${horasDiaPrevistas}h (Total acumulado: ${horasJustificadas}h)`,
+        );
       }
       // Para faltas parciais, calcular baseado nos horários efetivos
       else if (
@@ -1068,21 +1205,36 @@ export class PontoService {
           falta.horarioInicioEfetivo,
           falta.horarioFimEfetivo,
         );
-        horasJustificadas += horasDiaPrevistas - horasTrabalhadas;
+        const horasJustificadasFalta = horasDiaPrevistas - horasTrabalhadas;
+        horasJustificadas += horasJustificadasFalta;
+        console.log(
+          `  - Falta parcial: ${horasTrabalhadas}h trabalhadas, +${horasJustificadasFalta}h justificadas (Total: ${horasJustificadas}h)`,
+        );
       }
       // Para atrasos, considerar apenas os minutos de atraso
       else if (falta.tipo === TipoFalta.ATRASO && falta.minutosAtraso) {
-        horasJustificadas += falta.minutosAtraso / 60;
+        const horasAtraso = falta.minutosAtraso / 60;
+        horasJustificadas += horasAtraso;
+        console.log(
+          `  - Atraso: +${horasAtraso}h (Total: ${horasJustificadas}h)`,
+        );
       }
       // Para saídas antecipadas, considerar apenas os minutos antecipados
       else if (
         falta.tipo === TipoFalta.SAIDA_ANTECIPADA &&
         falta.minutosSaidaAntecipada
       ) {
-        horasJustificadas += falta.minutosSaidaAntecipada / 60;
+        const horasSaidaAntecipada = falta.minutosSaidaAntecipada / 60;
+        horasJustificadas += horasSaidaAntecipada;
+        console.log(
+          `  - Saída antecipada: +${horasSaidaAntecipada}h (Total: ${horasJustificadas}h)`,
+        );
       }
     }
 
+    console.log(
+      `[CALCULO_HORAS_JUSTIFICADAS] Total final: ${horasJustificadas}h`,
+    );
     return horasJustificadas;
   }
 
