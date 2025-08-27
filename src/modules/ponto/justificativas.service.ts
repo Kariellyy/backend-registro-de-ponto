@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AprovarJustificativaDto } from './dto/aprovar-justificativa.dto';
 import { CriarJustificativaDto } from './dto/criar-justificativa.dto';
+import { FiltrosJustificativasDto } from './dto/filtros-justificativas.dto';
 import { RejeitarJustificativaDto } from './dto/rejeitar-justificativa.dto';
 import {
   Justificativa,
@@ -67,7 +68,7 @@ export class JustificativasService {
     }
 
     // Atualizar justificativa
-    justificativa.status = StatusJustificativa.APROVADA;
+    justificativa.status = dados.status;
     justificativa.aprovadoPor = aprovadorId;
     justificativa.dataAprovacao = new Date();
     if (dados.observacoes) {
@@ -75,8 +76,12 @@ export class JustificativasService {
     }
 
     // Atualizar registro de ponto
+    const novoStatus = dados.status === StatusJustificativa.APROVADA 
+      ? StatusRegistro.JUSTIFICADO 
+      : StatusRegistro.REJEITADO;
+
     await this.registroPontoRepository.update(justificativa.registroPontoId, {
-      status: StatusRegistro.JUSTIFICADO,
+      status: novoStatus,
       temJustificativaPendente: false,
     });
 
@@ -150,5 +155,98 @@ export class JustificativasService {
     }
 
     return justificativa;
+  }
+
+  async buscarTodasJustificativas(
+    empresaId: string,
+    filtros?: FiltrosJustificativasDto,
+  ): Promise<Justificativa[]> {
+    const queryBuilder = this.justificativaRepository
+      .createQueryBuilder('justificativa')
+      .leftJoinAndSelect('justificativa.registroPonto', 'registro')
+      .leftJoinAndSelect('registro.usuario', 'usuario')
+      .leftJoinAndSelect('usuario.empresa', 'empresa')
+      .where('empresa.id = :empresaId', { empresaId });
+
+    if (filtros?.status) {
+      queryBuilder.andWhere('justificativa.status = :status', {
+        status: filtros.status,
+      });
+    }
+
+    if (filtros?.tipo) {
+      queryBuilder.andWhere('justificativa.tipo = :tipo', {
+        tipo: filtros.tipo,
+      });
+    }
+
+    if (filtros?.dataInicio) {
+      queryBuilder.andWhere('justificativa.createdAt >= :dataInicio', {
+        dataInicio: new Date(filtros.dataInicio),
+      });
+    }
+
+    if (filtros?.dataFim) {
+      queryBuilder.andWhere('justificativa.createdAt <= :dataFim', {
+        dataFim: new Date(filtros.dataFim),
+      });
+    }
+
+    if (filtros?.usuarioId) {
+      queryBuilder.andWhere('registro.usuarioId = :usuarioId', {
+        usuarioId: filtros.usuarioId,
+      });
+    }
+
+    return queryBuilder.orderBy('justificativa.createdAt', 'DESC').getMany();
+  }
+
+  async buscarEstatisticas(empresaId: string) {
+    const [total, pendentes, aprovadas, rejeitadas] = await Promise.all([
+      this.justificativaRepository
+        .createQueryBuilder('justificativa')
+        .leftJoin('justificativa.registroPonto', 'registro')
+        .leftJoin('registro.usuario', 'usuario')
+        .leftJoin('usuario.empresa', 'empresa')
+        .where('empresa.id = :empresaId', { empresaId })
+        .getCount(),
+      this.justificativaRepository
+        .createQueryBuilder('justificativa')
+        .leftJoin('justificativa.registroPonto', 'registro')
+        .leftJoin('registro.usuario', 'usuario')
+        .leftJoin('usuario.empresa', 'empresa')
+        .where('empresa.id = :empresaId', { empresaId })
+        .andWhere('justificativa.status = :status', {
+          status: StatusJustificativa.PENDENTE,
+        })
+        .getCount(),
+      this.justificativaRepository
+        .createQueryBuilder('justificativa')
+        .leftJoin('justificativa.registroPonto', 'registro')
+        .leftJoin('registro.usuario', 'usuario')
+        .leftJoin('usuario.empresa', 'empresa')
+        .where('empresa.id = :empresaId', { empresaId })
+        .andWhere('justificativa.status = :status', {
+          status: StatusJustificativa.APROVADA,
+        })
+        .getCount(),
+      this.justificativaRepository
+        .createQueryBuilder('justificativa')
+        .leftJoin('justificativa.registroPonto', 'registro')
+        .leftJoin('registro.usuario', 'usuario')
+        .leftJoin('usuario.empresa', 'empresa')
+        .where('empresa.id = :empresaId', { empresaId })
+        .andWhere('justificativa.status = :status', {
+          status: StatusJustificativa.REJEITADA,
+        })
+        .getCount(),
+    ]);
+
+    return {
+      total,
+      pendentes,
+      aprovadas,
+      rejeitadas,
+    };
   }
 }

@@ -1,10 +1,17 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { Usuario } from '../usuarios/entities/usuario.entity';
 import { AprovarJustificativaDto } from './dto/aprovar-justificativa.dto';
 import { CriarJustificativaDto } from './dto/criar-justificativa.dto';
-import { RejeitarJustificativaDto } from './dto/rejeitar-justificativa.dto';
 import { JustificativasService } from './justificativas.service';
 
 @Controller('justificativas')
@@ -21,6 +28,26 @@ export class JustificativasController {
     return this.justificativasService.criarJustificativa(registroId, dados);
   }
 
+  @Get()
+  async buscarTodasJustificativas(
+    @CurrentUser() usuario: Usuario,
+    @Query('status') status?: string,
+    @Query('tipo') tipo?: string,
+    @Query('dataInicio') dataInicio?: string,
+    @Query('dataFim') dataFim?: string,
+    @Query('usuarioId') usuarioId?: string,
+  ) {
+    return this.justificativasService.buscarTodasJustificativas(
+      usuario.empresaId,
+      { status, tipo, dataInicio, dataFim, usuarioId },
+    );
+  }
+
+  @Get('estatisticas')
+  async buscarEstatisticas(@CurrentUser() usuario: Usuario) {
+    return this.justificativasService.buscarEstatisticas(usuario.empresaId);
+  }
+
   @Post(':id/aprovar')
   async aprovarJustificativa(
     @Param('id') id: string,
@@ -28,19 +55,6 @@ export class JustificativasController {
     @CurrentUser() aprovador: Usuario,
   ) {
     return this.justificativasService.aprovarJustificativa(
-      id,
-      aprovador.id,
-      dados,
-    );
-  }
-
-  @Post(':id/rejeitar')
-  async rejeitarJustificativa(
-    @Param('id') id: string,
-    @Body() dados: RejeitarJustificativaDto,
-    @CurrentUser() aprovador: Usuario,
-  ) {
-    return this.justificativasService.rejeitarJustificativa(
       id,
       aprovador.id,
       dados,
