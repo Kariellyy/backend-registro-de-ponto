@@ -13,7 +13,7 @@ import { FaltaResponseDto } from './dto/falta-response.dto';
 import { RegistrarFaltaDto } from './dto/registrar-falta.dto';
 import { RegistrarPontoDto } from './dto/registrar-ponto.dto';
 import { RegistroPontoResponseDto } from './dto/registro-ponto-response.dto';
-import { Falta, StatusFalta } from './entities/falta.entity';
+import { Falta, StatusFalta, TipoFalta } from './entities/falta.entity';
 import {
   RegistroPonto,
   StatusRegistro,
@@ -210,6 +210,7 @@ export class PontoService {
     saldoMes: number;
     horasTrabalhadas: number;
     horasPrevistas: number;
+    horasJustificadas: number;
     saldoTotal: number;
     diasTrabalhados: number;
     diasUteis: number;
@@ -275,6 +276,14 @@ export class PontoService {
       usuario,
     );
 
+    // Calcular horas justificadas baseadas em faltas aprovadas
+    const horasJustificadas = await this.calcularHorasJustificadas(
+      usuarioId,
+      dataInicioCalculo,
+      dataFimCalculo,
+      usuario,
+    );
+
     // Calcular dias trabalhados
     const diasTrabalhados = this.calcularDiasTrabalhados(registros);
 
@@ -296,8 +305,8 @@ export class PontoService {
       usuario.informacoesTrabalhistas?.cargaHorariaSemanal || 40,
     );
 
-    // Calcular saldo do mês
-    const saldoMes = horasTrabalhadas - horasPrevistas;
+    // Calcular saldo do mês (considerando horas justificadas)
+    const saldoMes = horasTrabalhadas + horasJustificadas - horasPrevistas;
 
     // Calcular saldo total (todos os meses anteriores)
     const saldoTotal = await this.calcularSaldoTotal(
@@ -310,6 +319,7 @@ export class PontoService {
       saldoMes: Math.round(saldoMes * 100) / 100,
       horasTrabalhadas: Math.round(horasTrabalhadas * 100) / 100,
       horasPrevistas: Math.round(horasPrevistas * 100) / 100,
+      horasJustificadas: Math.round(horasJustificadas * 100) / 100,
       saldoTotal: Math.round((saldoTotal + saldoMes) * 100) / 100,
       diasTrabalhados,
       diasUteis,
@@ -647,7 +657,15 @@ export class PontoService {
       usuario,
     );
 
-    return horasTrabalhadasTotal - horasPrevistasTotal;
+    // Calcular horas justificadas totais
+    const horasJustificadasTotal = await this.calcularHorasJustificadas(
+      usuarioId,
+      dataInicioRegistros,
+      dataLimite,
+      usuario,
+    );
+
+    return horasTrabalhadasTotal + horasJustificadasTotal - horasPrevistasTotal;
   }
 
   private getDiaSemana(dia: number): string {
@@ -678,7 +696,7 @@ export class PontoService {
       throw new NotFoundException('Usuário não encontrado');
     }
 
-    const data = new Date(registrarFaltaDto.data);
+    const data = this.parseDateLocal(registrarFaltaDto.data);
 
     // Verificar se já existe falta para esta data
     const faltaExistente = await this.faltaRepository.findOne({
@@ -725,8 +743,36 @@ export class PontoService {
       .orderBy('falta.data', 'DESC');
 
     if (dataInicio && dataFim) {
-      const dataInicioDate = new Date(dataInicio);
-      const dataFimDate = new Date(dataFim);
+      const dataInicioDate = this.parseDateLocal(dataInicio);
+      const dataFimDate = this.parseDateLocal(dataFim);
+      query.andWhere('falta.data BETWEEN :dataInicio AND :dataFim', {
+        dataInicio: dataInicioDate,
+        dataFim: dataFimDate,
+      });
+    }
+
+    const faltas = await query.getMany();
+
+    return faltas.map((falta) =>
+      this.formatarRespostaFalta(falta, falta.usuario),
+    );
+  }
+
+  async buscarFaltasEmpresa(
+    empresaId: string,
+    dataInicio?: string,
+    dataFim?: string,
+  ): Promise<FaltaResponseDto[]> {
+    const query = this.faltaRepository
+      .createQueryBuilder('falta')
+      .leftJoinAndSelect('falta.usuario', 'usuario')
+      .leftJoinAndSelect('falta.aprovador', 'aprovador')
+      .where('usuario.empresaId = :empresaId', { empresaId })
+      .orderBy('falta.data', 'DESC');
+
+    if (dataInicio && dataFim) {
+      const dataInicioDate = this.parseDateLocal(dataInicio);
+      const dataFimDate = this.parseDateLocal(dataFim);
       query.andWhere('falta.data BETWEEN :dataInicio AND :dataFim', {
         dataInicio: dataInicioDate,
         dataFim: dataFimDate,
@@ -749,6 +795,16 @@ export class PontoService {
       .andWhere('usuario.empresaId = :empresaId', { empresaId })
       .orderBy('falta.data', 'DESC')
       .getMany();
+
+    console.log('Faltas pendentes encontradas:', faltas.length);
+    if (faltas.length > 0) {
+      console.log(
+        'Primeira falta - data:',
+        faltas[0].data,
+        'tipo:',
+        typeof faltas[0].data,
+      );
+    }
 
     return faltas.map((falta) =>
       this.formatarRespostaFalta(falta, falta.usuario),
@@ -932,14 +988,98 @@ export class PontoService {
     }
   }
 
+  private async calcularHorasJustificadas(
+    usuarioId: string,
+    dataInicio: Date,
+    dataFim: Date,
+    usuario: Usuario,
+  ): Promise<number> {
+    // Buscar faltas aprovadas no período
+    const faltasAprovadas = await this.faltaRepository.find({
+      where: {
+        usuarioId,
+        data: Between(dataInicio, dataFim),
+        status: StatusFalta.APROVADA,
+      },
+    });
+
+    let horasJustificadas = 0;
+
+    for (const falta of faltasAprovadas) {
+      const dataFalta = new Date(falta.data);
+      const diaSemana = dataFalta.getDay();
+
+      // Calcular horas que deveriam ser trabalhadas neste dia
+      const horasDiaPrevistas = this.calcularHorasDiaPrevistas(
+        diaSemana,
+        usuario,
+      );
+
+      // Para faltas completas, considerar todas as horas do dia
+      if (
+        falta.tipo === TipoFalta.FALTA_JUSTIFICADA ||
+        falta.tipo === TipoFalta.FALTA_INJUSTIFICADA
+      ) {
+        horasJustificadas += horasDiaPrevistas;
+      }
+      // Para faltas parciais, calcular baseado nos horários efetivos
+      else if (
+        falta.tipo === TipoFalta.FALTA_PARCIAL &&
+        falta.horarioInicioEfetivo &&
+        falta.horarioFimEfetivo
+      ) {
+        const horasTrabalhadas = this.calcularHorasEntreHorarios(
+          falta.horarioInicioEfetivo,
+          falta.horarioFimEfetivo,
+        );
+        horasJustificadas += horasDiaPrevistas - horasTrabalhadas;
+      }
+      // Para atrasos, considerar apenas os minutos de atraso
+      else if (falta.tipo === TipoFalta.ATRASO && falta.minutosAtraso) {
+        horasJustificadas += falta.minutosAtraso / 60;
+      }
+      // Para saídas antecipadas, considerar apenas os minutos antecipados
+      else if (
+        falta.tipo === TipoFalta.SAIDA_ANTECIPADA &&
+        falta.minutosSaidaAntecipada
+      ) {
+        horasJustificadas += falta.minutosSaidaAntecipada / 60;
+      }
+    }
+
+    return horasJustificadas;
+  }
+
+  private calcularHorasEntreHorarios(
+    horarioInicio: string,
+    horarioFim: string,
+  ): number {
+    const [horaInicio, minutoInicio] = horarioInicio.split(':').map(Number);
+    const [horaFim, minutoFim] = horarioFim.split(':').map(Number);
+
+    const minutosInicio = horaInicio * 60 + minutoInicio;
+    const minutosFim = horaFim * 60 + minutoFim;
+
+    const diferencaMinutos = minutosFim - minutosInicio;
+    return Math.max(0, diferencaMinutos / 60);
+  }
+
   private formatarRespostaFalta(
     falta: Falta,
     usuario: Usuario,
   ): FaltaResponseDto {
+    // Formatar data para evitar problemas de fuso horário
+    const dataFormatada = this.formatarDataParaString(falta.data);
+    const dataAprovacaoFormatada = falta.dataAprovacao
+      ? this.formatarDataParaString(falta.dataAprovacao)
+      : undefined;
+    const createdAtFormatada = this.formatarDataParaString(falta.createdAt);
+    const updatedAtFormatada = this.formatarDataParaString(falta.updatedAt);
+
     return {
       id: falta.id,
       usuarioId: falta.usuarioId,
-      data: falta.data,
+      data: dataFormatada,
       tipo: falta.tipo,
       status: falta.status,
       motivo: falta.motivo || undefined,
@@ -949,9 +1089,9 @@ export class PontoService {
       minutosAtraso: falta.minutosAtraso || undefined,
       minutosSaidaAntecipada: falta.minutosSaidaAntecipada || undefined,
       aprovadoPor: falta.aprovadoPor || undefined,
-      dataAprovacao: falta.dataAprovacao || undefined,
-      createdAt: falta.createdAt,
-      updatedAt: falta.updatedAt,
+      dataAprovacao: dataAprovacaoFormatada,
+      createdAt: createdAtFormatada,
+      updatedAt: updatedAtFormatada,
       usuario: {
         id: usuario.id,
         nome: usuario.nome,
@@ -965,5 +1105,40 @@ export class PontoService {
           }
         : undefined,
     };
+  }
+
+  private formatarDataParaString(data: Date | string | any): string {
+    // Se já é uma string, retornar como está
+    if (typeof data === 'string') {
+      return data;
+    }
+
+    // Se é um objeto Date, formatar
+    if (data instanceof Date) {
+      const ano = data.getFullYear();
+      const mes = String(data.getMonth() + 1).padStart(2, '0');
+      const dia = String(data.getDate()).padStart(2, '0');
+      return `${ano}-${mes}-${dia}`;
+    }
+
+    // Se é um objeto com propriedades de data (pode acontecer com TypeORM)
+    if (data && typeof data === 'object') {
+      // Tentar converter para Date
+      try {
+        const dateObj = new Date(data);
+        if (!isNaN(dateObj.getTime())) {
+          const ano = dateObj.getFullYear();
+          const mes = String(dateObj.getMonth() + 1).padStart(2, '0');
+          const dia = String(dateObj.getDate()).padStart(2, '0');
+          return `${ano}-${mes}-${dia}`;
+        }
+      } catch (error) {
+        console.error('Erro ao converter data:', error, 'Data recebida:', data);
+      }
+    }
+
+    // Fallback para outros tipos
+    console.warn('Tipo de data inesperado:', typeof data, data);
+    return String(data);
   }
 }

@@ -4,8 +4,8 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
-  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -38,12 +38,25 @@ export class FaltaController {
     return this.pontoService.buscarFaltas(user.id, dataInicio, dataFim);
   }
 
+  @Get('empresa')
+  async buscarFaltasEmpresa(
+    @CurrentUser() user: Usuario,
+    @Query('dataInicio') dataInicio?: string,
+    @Query('dataFim') dataFim?: string,
+  ) {
+    return this.pontoService.buscarFaltasEmpresa(
+      user.empresaId,
+      dataInicio,
+      dataFim,
+    );
+  }
+
   @Get('pendentes')
   async buscarFaltasPendentes(@CurrentUser() user: Usuario) {
     return this.pontoService.buscarFaltasPendentes(user.empresaId);
   }
 
-  @Put(':id/aprovar')
+  @Patch(':id/aprovar')
   async aprovarFalta(
     @Param('id') faltaId: string,
     @Body() aprovarFaltaDto: AprovarFaltaDto,
@@ -52,7 +65,7 @@ export class FaltaController {
     return this.pontoService.aprovarFalta(faltaId, user.id, aprovarFaltaDto);
   }
 
-  @Put(':id/rejeitar')
+  @Patch(':id/rejeitar')
   async rejeitarFalta(
     @Param('id') faltaId: string,
     @Body() rejeitarFaltaDto: RejeitarFaltaDto,
@@ -74,7 +87,9 @@ export class FaltaController {
     @Body() body: { data: string },
     @CurrentUser() user: Usuario,
   ) {
-    const data = new Date(body.data);
+    // Usar parseDateLocal para evitar problemas de fuso horário
+    const [year, month, day] = body.data.split('-').map(Number);
+    const data = new Date(year, month - 1, day);
     return this.pontoService.detectarFaltasAutomaticas(user.id, data);
   }
 
@@ -83,8 +98,13 @@ export class FaltaController {
     @Body() body: { dataInicio: string; dataFim: string },
     @CurrentUser() user: Usuario,
   ) {
-    const dataInicio = new Date(body.dataInicio);
-    const dataFim = new Date(body.dataFim);
+    // Usar parseDateLocal para evitar problemas de fuso horário
+    const [yearInicio, monthInicio, dayInicio] = body.dataInicio
+      .split('-')
+      .map(Number);
+    const [yearFim, monthFim, dayFim] = body.dataFim.split('-').map(Number);
+    const dataInicio = new Date(yearInicio, monthInicio - 1, dayInicio);
+    const dataFim = new Date(yearFim, monthFim - 1, dayFim);
     return this.pontoService.detectarFaltasRetroativas(
       user.id,
       dataInicio,

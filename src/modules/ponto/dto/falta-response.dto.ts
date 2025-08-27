@@ -3,7 +3,7 @@ import { StatusFalta, TipoFalta } from '../entities/falta.entity';
 export class FaltaResponseDto {
   id: string;
   usuarioId: string;
-  data: Date;
+  data: string;
   tipo: TipoFalta;
   status: StatusFalta;
   motivo?: string;
@@ -13,9 +13,9 @@ export class FaltaResponseDto {
   minutosAtraso?: number;
   minutosSaidaAntecipada?: number;
   aprovadoPor?: string;
-  dataAprovacao?: Date;
-  createdAt: Date;
-  updatedAt: Date;
+  dataAprovacao?: string;
+  createdAt: string;
+  updatedAt: string;
   usuario?: {
     id: string;
     nome: string;
