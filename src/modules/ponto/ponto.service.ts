@@ -988,13 +988,25 @@ export class PontoService {
       relations: ['informacoesTrabalhistas'],
     });
 
+    // Ajustar data fim para excluir o dia atual (regra de negócio)
+    const hoje = new Date();
+    const dataFimAjustada = new Date(dataFim);
+
+    // Se a data fim for o dia atual, ajustar para o dia anterior
+    if (dataFimAjustada.toDateString() === hoje.toDateString()) {
+      dataFimAjustada.setDate(dataFimAjustada.getDate() - 1);
+      console.log(
+        `Data fim ajustada de ${dataFim.toISOString().split('T')[0]} para ${dataFimAjustada.toISOString().split('T')[0]} (excluindo dia atual)`,
+      );
+    }
+
     console.log(
-      `Detectando faltas retroativas para ${funcionarios.length} funcionários da empresa ${empresaId} de ${dataInicio.toISOString().split('T')[0]} até ${dataFim.toISOString().split('T')[0]}`,
+      `Detectando faltas retroativas para ${funcionarios.length} funcionários da empresa ${empresaId} de ${dataInicio.toISOString().split('T')[0]} até ${dataFimAjustada.toISOString().split('T')[0]}`,
     );
 
-    // Iterar por cada dia no período
+    // Iterar por cada dia no período (até a data fim ajustada)
     const dataAtual = new Date(dataInicio);
-    while (dataAtual <= dataFim) {
+    while (dataAtual <= dataFimAjustada) {
       for (const funcionario of funcionarios) {
         try {
           await this.pontoValidatorService.detectarFaltasAutomaticas(
