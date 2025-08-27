@@ -45,10 +45,6 @@ export class PontoService {
       );
     }
 
-    console.log(
-      `[DEBUG] parseDateLocal: ${dateInput} -> ${date.toISOString()}`,
-    );
-
     return date;
   }
 
@@ -238,10 +234,6 @@ export class PontoService {
 
     // Data de fim efetiva (não pode ser posterior a hoje)
     const dataFimCalculo = hoje < dataFimMes ? hoje : dataFimMes;
-
-    console.log('=== CÁLCULO BANCO DE HORAS ===');
-    console.log('Data início registros:', dataInicioRegistros.toISOString());
-    console.log('Data fim cálculo:', dataFimCalculo.toISOString());
 
     // Buscar registros do período
     const registros = await this.registroPontoRepository.find({

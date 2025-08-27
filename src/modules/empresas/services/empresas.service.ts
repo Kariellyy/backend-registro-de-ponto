@@ -75,11 +75,6 @@ export class EmpresasService {
     id: string,
     updateEmpresaDto: UpdateEmpresaDto,
   ): Promise<Empresa> {
-    console.log(
-      'EmpresasService.update - Dados recebidos:',
-      JSON.stringify(updateEmpresaDto, null, 2),
-    );
-
     const empresa = await this.findOne(id);
 
     // Verificar se CNPJ já existe (se foi alterado)
@@ -112,7 +107,6 @@ export class EmpresasService {
 
     // Atualizar horários se fornecidos
     if (horarios && horarios.length > 0) {
-      console.log('Atualizando horários...');
       // Remover horários existentes
       await this.horarioEmpresaRepository.delete({ empresaId: id });
       // Criar novos horários
@@ -120,10 +114,6 @@ export class EmpresasService {
     }
 
     const updatedEmpresa = await this.findOne(id);
-    console.log(
-      'EmpresasService.update - Empresa atualizada com horários:',
-      updatedEmpresa.horarios?.length,
-    );
 
     return updatedEmpresa;
   }
@@ -158,9 +148,6 @@ export class EmpresasService {
     }
 
     await this.horarioEmpresaRepository.save(horarios);
-    console.log(
-      `Criados ${horarios.length} horários para empresa ${empresaId}`,
-    );
   }
 
   private async createHorariosPadrao(empresaId: string): Promise<void> {
