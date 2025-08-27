@@ -3,8 +3,8 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
-  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -29,17 +29,9 @@ export class JustificativasController {
   }
 
   @Get()
-  async buscarTodasJustificativas(
-    @CurrentUser() usuario: Usuario,
-    @Query('status') status?: string,
-    @Query('tipo') tipo?: string,
-    @Query('dataInicio') dataInicio?: string,
-    @Query('dataFim') dataFim?: string,
-    @Query('usuarioId') usuarioId?: string,
-  ) {
+  async buscarTodasJustificativas(@CurrentUser() usuario: Usuario) {
     return this.justificativasService.buscarTodasJustificativas(
       usuario.empresaId,
-      { status, tipo, dataInicio, dataFim, usuarioId },
     );
   }
 
@@ -48,7 +40,7 @@ export class JustificativasController {
     return this.justificativasService.buscarEstatisticas(usuario.empresaId);
   }
 
-  @Post(':id/aprovar')
+  @Patch(':id/aprovar')
   async aprovarJustificativa(
     @Param('id') id: string,
     @Body() dados: AprovarJustificativaDto,

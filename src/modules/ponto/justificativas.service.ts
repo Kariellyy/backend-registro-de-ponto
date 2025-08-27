@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AprovarJustificativaDto } from './dto/aprovar-justificativa.dto';
 import { CriarJustificativaDto } from './dto/criar-justificativa.dto';
-import { FiltrosJustificativasDto } from './dto/filtros-justificativas.dto';
 import { RejeitarJustificativaDto } from './dto/rejeitar-justificativa.dto';
 import {
   Justificativa,
@@ -76,9 +75,10 @@ export class JustificativasService {
     }
 
     // Atualizar registro de ponto
-    const novoStatus = dados.status === StatusJustificativa.APROVADA 
-      ? StatusRegistro.JUSTIFICADO 
-      : StatusRegistro.REJEITADO;
+    const novoStatus =
+      dados.status === StatusJustificativa.APROVADA
+        ? StatusRegistro.JUSTIFICADO
+        : StatusRegistro.REJEITADO;
 
     await this.registroPontoRepository.update(justificativa.registroPontoId, {
       status: novoStatus,
@@ -157,48 +157,15 @@ export class JustificativasService {
     return justificativa;
   }
 
-  async buscarTodasJustificativas(
-    empresaId: string,
-    filtros?: FiltrosJustificativasDto,
-  ): Promise<Justificativa[]> {
-    const queryBuilder = this.justificativaRepository
+  async buscarTodasJustificativas(empresaId: string): Promise<Justificativa[]> {
+    return this.justificativaRepository
       .createQueryBuilder('justificativa')
       .leftJoinAndSelect('justificativa.registroPonto', 'registro')
       .leftJoinAndSelect('registro.usuario', 'usuario')
       .leftJoinAndSelect('usuario.empresa', 'empresa')
-      .where('empresa.id = :empresaId', { empresaId });
-
-    if (filtros?.status) {
-      queryBuilder.andWhere('justificativa.status = :status', {
-        status: filtros.status,
-      });
-    }
-
-    if (filtros?.tipo) {
-      queryBuilder.andWhere('justificativa.tipo = :tipo', {
-        tipo: filtros.tipo,
-      });
-    }
-
-    if (filtros?.dataInicio) {
-      queryBuilder.andWhere('justificativa.createdAt >= :dataInicio', {
-        dataInicio: new Date(filtros.dataInicio),
-      });
-    }
-
-    if (filtros?.dataFim) {
-      queryBuilder.andWhere('justificativa.createdAt <= :dataFim', {
-        dataFim: new Date(filtros.dataFim),
-      });
-    }
-
-    if (filtros?.usuarioId) {
-      queryBuilder.andWhere('registro.usuarioId = :usuarioId', {
-        usuarioId: filtros.usuarioId,
-      });
-    }
-
-    return queryBuilder.orderBy('justificativa.createdAt', 'DESC').getMany();
+      .where('empresa.id = :empresaId', { empresaId })
+      .orderBy('justificativa.createdAt', 'DESC')
+      .getMany();
   }
 
   async buscarEstatisticas(empresaId: string) {
