@@ -5,15 +5,21 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, In, Repository } from 'typeorm';
+import { UserStatus } from '../../core/enums/user-status.enum';
 import { Empresa } from '../empresas/entities/empresa.entity';
 import { Usuario } from '../usuarios/entities/usuario.entity';
+import { AprovarFaltaDto, RejeitarFaltaDto } from './dto/aprovar-falta.dto';
+import { FaltaResponseDto } from './dto/falta-response.dto';
+import { RegistrarFaltaDto } from './dto/registrar-falta.dto';
 import { RegistrarPontoDto } from './dto/registrar-ponto.dto';
 import { RegistroPontoResponseDto } from './dto/registro-ponto-response.dto';
+import { Falta, StatusFalta } from './entities/falta.entity';
 import {
   RegistroPonto,
   StatusRegistro,
   TipoRegistro,
 } from './entities/registro-ponto.entity';
+import { PontoValidatorService } from './ponto-validator.service';
 
 @Injectable()
 export class PontoService {
@@ -24,6 +30,9 @@ export class PontoService {
     private usuarioRepository: Repository<Usuario>,
     @InjectRepository(Empresa)
     private empresaRepository: Repository<Empresa>,
+    @InjectRepository(Falta)
+    private faltaRepository: Repository<Falta>,
+    private pontoValidatorService: PontoValidatorService,
   ) {}
 
   /**
@@ -55,11 +64,22 @@ export class PontoService {
     // Buscar usuário
     const usuario = await this.usuarioRepository.findOne({
       where: { id: usuarioId },
-      relations: ['empresa'],
+      relations: ['empresa', 'informacoesTrabalhistas'],
     });
 
     if (!usuario) {
       throw new NotFoundException('Usuário não encontrado');
+    }
+
+    // Validar se pode registrar ponto
+    const validacao = await this.pontoValidatorService.validarRegistroPonto(
+      usuario,
+      registrarPontoDto.tipo,
+      new Date(),
+    );
+
+    if (!validacao.podeRegistrar) {
+      throw new BadRequestException(validacao.motivo);
     }
 
     // Buscar empresa
@@ -641,5 +661,309 @@ export class PontoService {
       'Sábado',
     ];
     return dias[dia];
+  }
+
+  // ===== MÉTODOS DE FALTA =====
+
+  async registrarFalta(
+    usuarioId: string,
+    registrarFaltaDto: RegistrarFaltaDto,
+  ): Promise<FaltaResponseDto> {
+    const usuario = await this.usuarioRepository.findOne({
+      where: { id: usuarioId },
+      relations: ['informacoesTrabalhistas'],
+    });
+
+    if (!usuario) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+
+    const data = new Date(registrarFaltaDto.data);
+
+    // Verificar se já existe falta para esta data
+    const faltaExistente = await this.faltaRepository.findOne({
+      where: {
+        usuarioId: usuarioId,
+        data: data,
+      },
+    });
+
+    if (faltaExistente) {
+      throw new BadRequestException(
+        'Já existe uma falta registrada para esta data',
+      );
+    }
+
+    const falta = this.faltaRepository.create({
+      usuarioId: usuarioId,
+      data: data,
+      tipo: registrarFaltaDto.tipo,
+      motivo: registrarFaltaDto.motivo,
+      observacoes: registrarFaltaDto.observacoes,
+      horarioInicioEfetivo: registrarFaltaDto.horarioInicioEfetivo,
+      horarioFimEfetivo: registrarFaltaDto.horarioFimEfetivo,
+      minutosAtraso: registrarFaltaDto.minutosAtraso,
+      minutosSaidaAntecipada: registrarFaltaDto.minutosSaidaAntecipada,
+      status: StatusFalta.PENDENTE,
+    });
+
+    const faltaSalva = await this.faltaRepository.save(falta);
+
+    return this.formatarRespostaFalta(faltaSalva, usuario);
+  }
+
+  async buscarFaltas(
+    usuarioId: string,
+    dataInicio?: string,
+    dataFim?: string,
+  ): Promise<FaltaResponseDto[]> {
+    const query = this.faltaRepository
+      .createQueryBuilder('falta')
+      .leftJoinAndSelect('falta.usuario', 'usuario')
+      .leftJoinAndSelect('falta.aprovador', 'aprovador')
+      .where('falta.usuarioId = :usuarioId', { usuarioId })
+      .orderBy('falta.data', 'DESC');
+
+    if (dataInicio && dataFim) {
+      const dataInicioDate = new Date(dataInicio);
+      const dataFimDate = new Date(dataFim);
+      query.andWhere('falta.data BETWEEN :dataInicio AND :dataFim', {
+        dataInicio: dataInicioDate,
+        dataFim: dataFimDate,
+      });
+    }
+
+    const faltas = await query.getMany();
+
+    return faltas.map((falta) =>
+      this.formatarRespostaFalta(falta, falta.usuario),
+    );
+  }
+
+  async buscarFaltasPendentes(empresaId: string): Promise<FaltaResponseDto[]> {
+    const faltas = await this.faltaRepository
+      .createQueryBuilder('falta')
+      .leftJoinAndSelect('falta.usuario', 'usuario')
+      .leftJoinAndSelect('falta.aprovador', 'aprovador')
+      .where('falta.status = :status', { status: StatusFalta.PENDENTE })
+      .andWhere('usuario.empresaId = :empresaId', { empresaId })
+      .orderBy('falta.data', 'DESC')
+      .getMany();
+
+    return faltas.map((falta) =>
+      this.formatarRespostaFalta(falta, falta.usuario),
+    );
+  }
+
+  async aprovarFalta(
+    faltaId: string,
+    aprovadorId: string,
+    aprovarFaltaDto: AprovarFaltaDto,
+  ): Promise<FaltaResponseDto> {
+    const falta = await this.faltaRepository.findOne({
+      where: { id: faltaId },
+      relations: ['usuario'],
+    });
+
+    if (!falta) {
+      throw new NotFoundException('Falta não encontrada');
+    }
+
+    if (falta.status !== StatusFalta.PENDENTE) {
+      throw new BadRequestException('Falta já foi processada');
+    }
+
+    falta.status = StatusFalta.APROVADA;
+    falta.aprovadoPor = aprovadorId;
+    falta.dataAprovacao = new Date();
+    falta.observacoes = aprovarFaltaDto.observacoes || null;
+
+    const faltaAtualizada = await this.faltaRepository.save(falta);
+
+    return this.formatarRespostaFalta(faltaAtualizada, falta.usuario);
+  }
+
+  async rejeitarFalta(
+    faltaId: string,
+    aprovadorId: string,
+    rejeitarFaltaDto: RejeitarFaltaDto,
+  ): Promise<FaltaResponseDto> {
+    const falta = await this.faltaRepository.findOne({
+      where: { id: faltaId },
+      relations: ['usuario'],
+    });
+
+    if (!falta) {
+      throw new NotFoundException('Falta não encontrada');
+    }
+
+    if (falta.status !== StatusFalta.PENDENTE) {
+      throw new BadRequestException('Falta já foi processada');
+    }
+
+    falta.status = StatusFalta.REJEITADA;
+    falta.aprovadoPor = aprovadorId;
+    falta.dataAprovacao = new Date();
+    falta.observacoes = rejeitarFaltaDto.motivo;
+
+    const faltaAtualizada = await this.faltaRepository.save(falta);
+
+    return this.formatarRespostaFalta(faltaAtualizada, falta.usuario);
+  }
+
+  async deletarFalta(faltaId: string, usuarioId: string): Promise<void> {
+    const falta = await this.faltaRepository.findOne({
+      where: { id: faltaId, usuarioId: usuarioId },
+    });
+
+    if (!falta) {
+      throw new NotFoundException('Falta não encontrada');
+    }
+
+    if (falta.status !== StatusFalta.PENDENTE) {
+      throw new BadRequestException(
+        'Não é possível deletar uma falta já processada',
+      );
+    }
+
+    await this.faltaRepository.remove(falta);
+  }
+
+  async detectarFaltasAutomaticas(
+    usuarioId: string,
+    data: Date,
+  ): Promise<void> {
+    const usuario = await this.usuarioRepository.findOne({
+      where: { id: usuarioId },
+      relations: ['informacoesTrabalhistas'],
+    });
+
+    if (!usuario) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+
+    // Detectar faltas para todos os funcionários da empresa
+    await this.detectarFaltasParaEmpresa(usuario.empresaId, data);
+  }
+
+  async detectarFaltasParaEmpresa(
+    empresaId: string,
+    data: Date,
+  ): Promise<void> {
+    // Buscar todos os funcionários ativos da empresa
+    const funcionarios = await this.usuarioRepository.find({
+      where: { empresaId: empresaId, status: UserStatus.ATIVO },
+      relations: ['informacoesTrabalhistas'],
+    });
+
+    console.log(
+      `Detectando faltas para ${funcionarios.length} funcionários da empresa ${empresaId} na data ${data.toISOString().split('T')[0]}`,
+    );
+
+    for (const funcionario of funcionarios) {
+      try {
+        await this.pontoValidatorService.detectarFaltasAutomaticas(
+          funcionario,
+          data,
+        );
+      } catch (error) {
+        console.error(
+          `Erro ao detectar faltas para funcionário ${funcionario.id}:`,
+          error,
+        );
+      }
+    }
+  }
+
+  async detectarFaltasRetroativas(
+    usuarioId: string,
+    dataInicio: Date,
+    dataFim: Date,
+  ): Promise<void> {
+    const usuario = await this.usuarioRepository.findOne({
+      where: { id: usuarioId },
+      relations: ['informacoesTrabalhistas'],
+    });
+
+    if (!usuario) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+
+    // Detectar faltas para todos os funcionários da empresa no período
+    await this.detectarFaltasRetroativasParaEmpresa(
+      usuario.empresaId,
+      dataInicio,
+      dataFim,
+    );
+  }
+
+  async detectarFaltasRetroativasParaEmpresa(
+    empresaId: string,
+    dataInicio: Date,
+    dataFim: Date,
+  ): Promise<void> {
+    // Buscar todos os funcionários ativos da empresa
+    const funcionarios = await this.usuarioRepository.find({
+      where: { empresaId: empresaId, status: UserStatus.ATIVO },
+      relations: ['informacoesTrabalhistas'],
+    });
+
+    console.log(
+      `Detectando faltas retroativas para ${funcionarios.length} funcionários da empresa ${empresaId} de ${dataInicio.toISOString().split('T')[0]} até ${dataFim.toISOString().split('T')[0]}`,
+    );
+
+    // Iterar por cada dia no período
+    const dataAtual = new Date(dataInicio);
+    while (dataAtual <= dataFim) {
+      for (const funcionario of funcionarios) {
+        try {
+          await this.pontoValidatorService.detectarFaltasAutomaticas(
+            funcionario,
+            new Date(dataAtual),
+          );
+        } catch (error) {
+          console.error(
+            `Erro ao detectar faltas retroativas para funcionário ${funcionario.id} na data ${dataAtual.toISOString().split('T')[0]}:`,
+            error,
+          );
+        }
+      }
+      dataAtual.setDate(dataAtual.getDate() + 1);
+    }
+  }
+
+  private formatarRespostaFalta(
+    falta: Falta,
+    usuario: Usuario,
+  ): FaltaResponseDto {
+    return {
+      id: falta.id,
+      usuarioId: falta.usuarioId,
+      data: falta.data,
+      tipo: falta.tipo,
+      status: falta.status,
+      motivo: falta.motivo || undefined,
+      observacoes: falta.observacoes || undefined,
+      horarioInicioEfetivo: falta.horarioInicioEfetivo || undefined,
+      horarioFimEfetivo: falta.horarioFimEfetivo || undefined,
+      minutosAtraso: falta.minutosAtraso || undefined,
+      minutosSaidaAntecipada: falta.minutosSaidaAntecipada || undefined,
+      aprovadoPor: falta.aprovadoPor || undefined,
+      dataAprovacao: falta.dataAprovacao || undefined,
+      createdAt: falta.createdAt,
+      updatedAt: falta.updatedAt,
+      usuario: {
+        id: usuario.id,
+        nome: usuario.nome,
+        email: usuario.email,
+      },
+      aprovador: falta.aprovador
+        ? {
+            id: falta.aprovador.id,
+            nome: falta.aprovador.nome,
+            email: falta.aprovador.email,
+          }
+        : undefined,
+    };
   }
 }

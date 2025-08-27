@@ -4,10 +4,13 @@ import { Empresa } from '../empresas/entities/empresa.entity';
 import { HorarioEmpresa } from '../empresas/entities/horario-empresa.entity';
 import { HorarioFuncionario } from '../usuarios/entities/horario-funcionario.entity';
 import { Usuario } from '../usuarios/entities/usuario.entity';
+import { Falta } from './entities/falta.entity';
 import { Justificativa } from './entities/justificativa.entity';
 import { RegistroPonto } from './entities/registro-ponto.entity';
+import { FaltaController } from './falta.controller';
 import { JustificativasController } from './justificativas.controller';
 import { JustificativasService } from './justificativas.service';
+import { PontoValidatorService } from './ponto-validator.service';
 import { PontoController } from './ponto.controller';
 import { PontoService } from './ponto.service';
 
@@ -16,14 +19,15 @@ import { PontoService } from './ponto.service';
     TypeOrmModule.forFeature([
       RegistroPonto,
       Justificativa,
+      Falta,
       Usuario,
       Empresa,
       HorarioEmpresa,
       HorarioFuncionario,
     ]),
   ],
-  controllers: [PontoController, JustificativasController],
-  providers: [PontoService, JustificativasService],
-  exports: [PontoService, JustificativasService],
+  controllers: [PontoController, FaltaController, JustificativasController],
+  providers: [PontoService, PontoValidatorService, JustificativasService],
+  exports: [PontoService, PontoValidatorService, JustificativasService],
 })
 export class PontoModule {}
