@@ -6,8 +6,6 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, In, Repository } from 'typeorm';
 import { Empresa } from '../empresas/entities/empresa.entity';
-import { HorarioEmpresa } from '../empresas/entities/horario-empresa.entity';
-import { HorarioFuncionario } from '../usuarios/entities/horario-funcionario.entity';
 import { Usuario } from '../usuarios/entities/usuario.entity';
 import { RegistrarPontoDto } from './dto/registrar-ponto.dto';
 import { RegistroPontoResponseDto } from './dto/registro-ponto-response.dto';
@@ -27,6 +25,32 @@ export class PontoService {
     @InjectRepository(Empresa)
     private empresaRepository: Repository<Empresa>,
   ) {}
+
+  /**
+   * Método utilitário para criar datas no fuso horário local
+   * Evita problemas de conversão UTC que podem causar diferença de 1 dia
+   */
+  private parseDateLocal(dateInput: string | Date): Date {
+    let date: Date;
+
+    if (typeof dateInput === 'string') {
+      const [year, month, day] = dateInput.split('-').map(Number);
+      date = new Date(year, month - 1, day);
+    } else {
+      // Se já é um Date, criar uma nova data local
+      date = new Date(
+        dateInput.getFullYear(),
+        dateInput.getMonth(),
+        dateInput.getDate(),
+      );
+    }
+
+    console.log(
+      `[DEBUG] parseDateLocal: ${dateInput} -> ${date.toISOString()}`,
+    );
+
+    return date;
+  }
 
   async registrarPonto(
     usuarioId: string,
@@ -177,7 +201,7 @@ export class PontoService {
     semanasTrabalhadas: number;
     dataCalculoAte: Date;
   }> {
-    // Buscar usuário e empresa
+    // Buscar usuário com todas as relações necessárias
     const usuario = await this.usuarioRepository.findOne({
       where: { id: usuarioId },
       relations: [
@@ -192,56 +216,73 @@ export class PontoService {
       throw new NotFoundException('Usuário não encontrado');
     }
 
-    const dataInicio = new Date(ano, mes - 1, 1);
-    const dataFim = new Date(ano, mes, 0, 23, 59, 59);
-
-    // Considerar data de início dos registros
-    let dataInicioCalculo = dataInicio;
-    if (usuario.informacoesTrabalhistas?.inicioRegistros) {
-      const dataInicioRegistros = new Date(
-        usuario.informacoesTrabalhistas.inicioRegistros,
+    if (!usuario.informacoesTrabalhistas?.inicioRegistros) {
+      throw new BadRequestException(
+        'Data de início dos registros não configurada',
       );
-      if (dataInicioRegistros > dataInicio) {
-        dataInicioCalculo = dataInicioRegistros;
-      }
     }
 
+    // Definir período de cálculo
+    const dataInicioMes = new Date(ano, mes - 1, 1);
+    const dataFimMes = new Date(ano, mes, 0, 23, 59, 59, 999);
+    const hoje = new Date();
+
+    // Data de início dos registros (data basal)
+    const dataInicioRegistros = this.parseDateLocal(
+      usuario.informacoesTrabalhistas.inicioRegistros,
+    );
+
+    // Data de início efetiva para o mês (não pode ser anterior ao início dos registros)
+    const dataInicioCalculo =
+      dataInicioRegistros > dataInicioMes ? dataInicioRegistros : dataInicioMes;
+
+    // Data de fim efetiva (não pode ser posterior a hoje)
+    const dataFimCalculo = hoje < dataFimMes ? hoje : dataFimMes;
+
+    console.log('=== CÁLCULO BANCO DE HORAS ===');
+    console.log('Data início registros:', dataInicioRegistros.toISOString());
+    console.log('Data fim cálculo:', dataFimCalculo.toISOString());
+
+    // Buscar registros do período
     const registros = await this.registroPontoRepository.find({
       where: {
         usuarioId,
-        dataHora: Between(dataInicioCalculo, dataFim),
+        dataHora: Between(dataInicioCalculo, dataFimCalculo),
         status: In([StatusRegistro.APROVADO, StatusRegistro.JUSTIFICADO]),
       },
       order: { dataHora: 'ASC' },
     });
 
-    // Calcular horas trabalhadas considerando intervalos
-    const horasTrabalhadas = this.calcularHorasTrabalhadasPorDia(registros);
+    // Calcular horas trabalhadas
+    const horasTrabalhadas = this.calcularHorasTrabalhadas(registros);
 
-    // Calcular horas previstas apenas até hoje (ExpectedUntilToday)
-    const hoje = new Date();
-    const dataFimCalculo = hoje < dataFim ? hoje : dataFim;
-    const horasPrevistas = this.calcularHorasPrevisasNovas(
-      dataInicioCalculo,
+    // Calcular horas previstas (desde início dos registros até hoje)
+    const horasPrevistas = this.calcularHorasPrevistas(
+      dataInicioRegistros,
       dataFimCalculo,
       usuario,
     );
 
-    // Calcular dias trabalhados e úteis (apenas até hoje)
+    // Calcular dias trabalhados
     const diasTrabalhados = this.calcularDiasTrabalhados(registros);
-    const diasUteis = this.calcularDiasUteisDoUsuario(
+
+    // Calcular dias úteis no período
+    const diasUteis = this.calcularDiasUteis(
       dataInicioCalculo,
       dataFimCalculo,
       usuario,
     );
 
-    // Calcular horas semanais (apenas até hoje)
-    const semanasTrabalhadas = this.calcularSemanas(
+    // Calcular semanas trabalhadas
+    const semanasTrabalhadas = this.calcularSemanasTrabalhadas(
       dataInicioCalculo,
       dataFimCalculo,
     );
-    const horasSemanais =
-      usuario.informacoesTrabalhistas?.cargaHorariaSemanal || 40;
+
+    // Carga horária semanal
+    const horasSemanais = Number(
+      usuario.informacoesTrabalhistas?.cargaHorariaSemanal || 40,
+    );
 
     // Calcular saldo do mês
     const saldoMes = horasTrabalhadas - horasPrevistas;
@@ -355,279 +396,6 @@ export class PontoService {
     return R * c; // Distância em metros
   }
 
-  private calcularHorasTrabalhadasPorDia(registros: RegistroPonto[]): number {
-    const registrosPorDia = new Map<string, RegistroPonto[]>();
-
-    // Agrupar registros por dia
-    for (const registro of registros) {
-      const data = registro.dataHora.toISOString().split('T')[0];
-      if (!registrosPorDia.has(data)) {
-        registrosPorDia.set(data, []);
-      }
-      registrosPorDia.get(data)!.push(registro);
-    }
-
-    let totalHoras = 0;
-
-    // Calcular horas para cada dia
-    for (const [data, registrosDia] of registrosPorDia) {
-      const horasDia = this.calcularHorasDia(registrosDia);
-      totalHoras += horasDia;
-    }
-
-    return totalHoras;
-  }
-
-  private calcularHorasDia(registros: RegistroPonto[]): number {
-    registros.sort((a, b) => a.dataHora.getTime() - b.dataHora.getTime());
-
-    let horasTrabalhadas = 0;
-    let entrada: Date | null = null;
-    let saidaIntervalo: Date | null = null;
-
-    for (const registro of registros) {
-      switch (registro.tipo) {
-        case TipoRegistro.ENTRADA:
-          entrada = registro.dataHora;
-          break;
-
-        case TipoRegistro.INTERVALO_INICIO:
-          if (entrada) {
-            // Calcular manhã (entrada até início do intervalo)
-            const horasManha =
-              (registro.dataHora.getTime() - entrada.getTime()) /
-              (1000 * 60 * 60);
-            horasTrabalhadas += horasManha;
-          }
-          break;
-
-        case TipoRegistro.INTERVALO_FIM:
-          saidaIntervalo = registro.dataHora;
-          break;
-
-        case TipoRegistro.SAIDA:
-          if (saidaIntervalo) {
-            // Calcular tarde (fim do intervalo até saída)
-            const horasTarde =
-              (registro.dataHora.getTime() - saidaIntervalo.getTime()) /
-              (1000 * 60 * 60);
-            horasTrabalhadas += horasTarde;
-          } else if (entrada) {
-            // Jornada sem intervalo registrado
-            const horasTotal =
-              (registro.dataHora.getTime() - entrada.getTime()) /
-              (1000 * 60 * 60);
-            horasTrabalhadas += horasTotal;
-          }
-          break;
-      }
-    }
-
-    return horasTrabalhadas;
-  }
-
-  private parseHorario(horario: string): number {
-    const [horas, minutos] = horario.split(':').map(Number);
-    return horas + minutos / 60;
-  }
-
-  private calcularDiasTrabalhados(registros: RegistroPonto[]): number {
-    const diasTrabalhados = new Set<string>();
-
-    for (const registro of registros) {
-      const data = registro.dataHora.toISOString().split('T')[0];
-      diasTrabalhados.add(data);
-    }
-
-    return diasTrabalhados.size;
-  }
-
-  private calcularHorasPrevisasNovas(
-    dataInicio: Date,
-    dataFim: Date,
-    usuario: Usuario,
-  ): number {
-    let horasTotal = 0;
-    const data = new Date(dataInicio);
-
-    while (data <= dataFim) {
-      const diaSemana = data.getDay();
-      const horaseDia = this.calcularHorasDiaPrevistas(diaSemana, usuario);
-      if (horaseDia > 0) {
-        horasTotal += horaseDia;
-      }
-
-      data.setDate(data.getDate() + 1);
-    }
-
-    return horasTotal;
-  }
-
-  private calcularHorasDiaPrevistas(
-    diaSemana: number,
-    usuario: Usuario,
-  ): number {
-    try {
-      // Priorizar horários individuais do funcionário
-      if (usuario.horarios && usuario.horarios.length > 0) {
-        const horariosFuncionario = this.converterHorariosFuncionario(
-          usuario.horarios,
-        );
-
-        if (horariosFuncionario[diaSemana.toString()]) {
-          const horario = horariosFuncionario[diaSemana.toString()];
-
-          // Verificar se o funcionário trabalha neste dia
-          if (!horario.ativo) {
-            return 0;
-          }
-
-          const inicio = this.parseHorario(horario.inicio);
-          const fim = this.parseHorario(horario.fim);
-          let horasTotal = fim - inicio;
-
-          // Descontar intervalo se existir
-          if (
-            horario.temIntervalo &&
-            horario.intervaloInicio &&
-            horario.intervaloFim
-          ) {
-            const intervaloInicio = this.parseHorario(horario.intervaloInicio);
-            const intervaloFim = this.parseHorario(horario.intervaloFim);
-            const horasIntervalo = intervaloFim - intervaloInicio;
-            horasTotal -= horasIntervalo;
-          }
-
-          return horasTotal;
-        }
-      }
-
-      // Fallback para horários da empresa
-      if (
-        usuario.empresa &&
-        usuario.empresa.horarios &&
-        usuario.empresa.horarios.length > 0
-      ) {
-        const horariosEmpresa = this.converterHorariosEmpresa(
-          usuario.empresa.horarios,
-        );
-
-        if (horariosEmpresa[diaSemana.toString()]) {
-          const horario = horariosEmpresa[diaSemana.toString()];
-
-          // Verificar se a empresa funciona neste dia
-          if (!horario.ativo) {
-            return 0;
-          }
-
-          const inicio = this.parseHorario(horario.inicio);
-          const fim = this.parseHorario(horario.fim);
-          let horasTotal = fim - inicio;
-
-          // Descontar intervalo se existir
-          if (
-            horario.temIntervalo &&
-            horario.intervaloInicio &&
-            horario.intervaloFim
-          ) {
-            const intervaloInicio = this.parseHorario(horario.intervaloInicio);
-            const intervaloFim = this.parseHorario(horario.intervaloFim);
-            const horasIntervalo = intervaloFim - intervaloInicio;
-            horasTotal -= horasIntervalo;
-          }
-
-          return horasTotal;
-        }
-      }
-
-      return 0;
-    } catch (error) {
-      console.error('Erro ao calcular horas previstas:', error);
-      return 0;
-    }
-  }
-
-  private calcularDiasUteisDoUsuario(
-    dataInicio: Date,
-    dataFim: Date,
-    usuario: Usuario,
-  ): number {
-    let diasUteis = 0;
-    const data = new Date(dataInicio);
-
-    while (data <= dataFim) {
-      const diaSemana = data.getDay();
-      const horasDia = this.calcularHorasDiaPrevistas(diaSemana, usuario);
-
-      // Contar como dia útil se o funcionário tem horas previstas neste dia
-      if (horasDia > 0) {
-        diasUteis++;
-      }
-
-      data.setDate(data.getDate() + 1);
-    }
-
-    return diasUteis;
-  }
-
-  private calcularSemanas(dataInicio: Date, dataFim: Date): number {
-    const diffTime = dataFim.getTime() - dataInicio.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return Math.ceil(diffDays / 7);
-  }
-
-  private calcularDiasUteis(dataInicio: Date, dataFim: Date): number {
-    let diasUteis = 0;
-    const data = new Date(dataInicio);
-
-    while (data <= dataFim) {
-      const diaSemana = data.getDay();
-      if (diaSemana !== 0 && diaSemana !== 6) {
-        // 0 = Domingo, 6 = Sábado
-        diasUteis++;
-      }
-      data.setDate(data.getDate() + 1);
-    }
-
-    return diasUteis;
-  }
-
-  private async calcularSaldoTotal(
-    usuarioId: string,
-    usuario: Usuario,
-    dataLimite: Date,
-  ): Promise<number> {
-    // Determinar data de início dos registros
-    let dataInicioRegistros = new Date(0); // Fallback para início dos tempos
-    if (usuario.informacoesTrabalhistas?.inicioRegistros) {
-      dataInicioRegistros = new Date(
-        usuario.informacoesTrabalhistas.inicioRegistros,
-      );
-    }
-
-    const registros = await this.registroPontoRepository.find({
-      where: {
-        usuarioId,
-        dataHora: Between(dataInicioRegistros, dataLimite),
-        status: In([StatusRegistro.APROVADO, StatusRegistro.JUSTIFICADO]),
-      },
-      order: { dataHora: 'ASC' },
-    });
-
-    // Calcular saldo total usando a mesma lógica detalhada
-    const horasTrabalhadasTotal =
-      this.calcularHorasTrabalhadasPorDia(registros);
-
-    // Calcular horas previstas desde o início dos registros até a data limite
-    const horasPrevisasTotal = this.calcularHorasPrevisasNovas(
-      dataInicioRegistros,
-      dataLimite,
-      usuario,
-    );
-
-    return horasTrabalhadasTotal - horasPrevisasTotal;
-  }
-
   private formatarResposta(
     registro: RegistroPonto,
     usuario: Usuario,
@@ -651,42 +419,235 @@ export class PontoService {
     };
   }
 
-  // Funções utilitárias para conversão de horários
-  private converterHorariosFuncionario(horarios: HorarioFuncionario[]): {
-    [diaSemana: string]: any;
-  } {
-    const resultado: { [diaSemana: string]: any } = {};
+  private calcularHorasTrabalhadas(registros: RegistroPonto[]): number {
+    const registrosPorDia = new Map<string, RegistroPonto[]>();
 
-    horarios.forEach((horario) => {
-      resultado[horario.diaSemana.toString()] = {
-        ativo: horario.ativo,
-        inicio: horario.horarioInicio || '',
-        fim: horario.horarioFim || '',
-        temIntervalo: horario.temIntervalo,
-        intervaloInicio: horario.intervaloInicio || '',
-        intervaloFim: horario.intervaloFim || '',
-      };
-    });
+    // Agrupar registros por dia
+    for (const registro of registros) {
+      const data = registro.dataHora.toISOString().split('T')[0];
+      if (!registrosPorDia.has(data)) {
+        registrosPorDia.set(data, []);
+      }
+      registrosPorDia.get(data)!.push(registro);
+    }
 
-    return resultado;
+    let totalHoras = 0;
+
+    // Calcular horas para cada dia
+    for (const [data, registrosDia] of registrosPorDia) {
+      const horasDia = this.calcularHorasDia(registrosDia);
+      totalHoras += horasDia;
+    }
+
+    return totalHoras;
   }
 
-  private converterHorariosEmpresa(horarios: HorarioEmpresa[]): {
-    [diaSemana: string]: any;
-  } {
-    const resultado: { [diaSemana: string]: any } = {};
+  private calcularHorasDia(registros: RegistroPonto[]): number {
+    if (registros.length === 0) return 0;
 
-    horarios.forEach((horario) => {
-      resultado[horario.diaSemana.toString()] = {
-        ativo: horario.ativo,
-        inicio: horario.horarioInicio || '',
-        fim: horario.horarioFim || '',
-        temIntervalo: horario.temIntervalo,
-        intervaloInicio: horario.intervaloInicio || '',
-        intervaloFim: horario.intervaloFim || '',
-      };
+    // Ordenar registros por data/hora
+    registros.sort((a, b) => a.dataHora.getTime() - b.dataHora.getTime());
+
+    let horasTrabalhadas = 0;
+    let entrada: Date | null = null;
+    let saidaIntervalo: Date | null = null;
+
+    for (const registro of registros) {
+      switch (registro.tipo) {
+        case TipoRegistro.ENTRADA:
+          entrada = registro.dataHora;
+          break;
+
+        case TipoRegistro.INTERVALO_INICIO:
+          if (entrada) {
+            const horasManha =
+              (registro.dataHora.getTime() - entrada.getTime()) /
+              (1000 * 60 * 60);
+            horasTrabalhadas += horasManha;
+          }
+          break;
+
+        case TipoRegistro.INTERVALO_FIM:
+          saidaIntervalo = registro.dataHora;
+          break;
+
+        case TipoRegistro.SAIDA:
+          if (saidaIntervalo) {
+            // Com intervalo: calcular tarde (fim do intervalo até saída)
+            const horasTarde =
+              (registro.dataHora.getTime() - saidaIntervalo.getTime()) /
+              (1000 * 60 * 60);
+            horasTrabalhadas += horasTarde;
+          } else if (entrada) {
+            // Sem intervalo: calcular total (entrada até saída)
+            const horasTotal =
+              (registro.dataHora.getTime() - entrada.getTime()) /
+              (1000 * 60 * 60);
+            horasTrabalhadas += horasTotal;
+          }
+          break;
+      }
+    }
+
+    return horasTrabalhadas;
+  }
+
+  private calcularHorasPrevistas(
+    dataInicio: Date,
+    dataFim: Date,
+    usuario: any,
+  ): number {
+    let horasTotal = 0;
+    const data = new Date(dataInicio);
+
+    while (data <= dataFim) {
+      const diaSemana = data.getDay();
+      const horasDia = this.calcularHorasDiaPrevistas(diaSemana, usuario);
+
+      if (horasDia > 0) {
+        horasTotal += horasDia;
+      }
+
+      data.setDate(data.getDate() + 1);
+    }
+
+    return horasTotal;
+  }
+
+  private calcularHorasDiaPrevistas(diaSemana: number, usuario: any): number {
+    // Priorizar horários individuais do funcionário
+    if (usuario.horarios && usuario.horarios.length > 0) {
+      const horarioFuncionario = usuario.horarios.find(
+        (h) => h.diaSemana === diaSemana,
+      );
+
+      if (horarioFuncionario && horarioFuncionario.ativo) {
+        return this.calcularHorasHorario(horarioFuncionario);
+      }
+    }
+
+    // Fallback para horários da empresa
+    if (usuario.empresa?.horarios && usuario.empresa.horarios.length > 0) {
+      const horarioEmpresa = usuario.empresa.horarios.find(
+        (h) => h.diaSemana === diaSemana,
+      );
+
+      if (horarioEmpresa && horarioEmpresa.ativo) {
+        return this.calcularHorasHorario(horarioEmpresa);
+      }
+    }
+
+    return 0;
+  }
+
+  private calcularHorasHorario(horario: any): number {
+    if (!horario.horarioInicio || !horario.horarioFim) return 0;
+
+    const inicio = this.parseHorario(horario.horarioInicio);
+    const fim = this.parseHorario(horario.horarioFim);
+    let horasTotal = fim - inicio;
+
+    // Descontar intervalo se existir
+    if (
+      horario.temIntervalo &&
+      horario.intervaloInicio &&
+      horario.intervaloFim
+    ) {
+      const intervaloInicio = this.parseHorario(horario.intervaloInicio);
+      const intervaloFim = this.parseHorario(horario.intervaloFim);
+      const horasIntervalo = intervaloFim - intervaloInicio;
+      horasTotal -= horasIntervalo;
+    }
+
+    return horasTotal;
+  }
+
+  private parseHorario(horario: string): number {
+    const [horas, minutos] = horario.split(':').map(Number);
+    return horas + minutos / 60;
+  }
+
+  private calcularDiasTrabalhados(registros: RegistroPonto[]): number {
+    const diasTrabalhados = new Set<string>();
+
+    for (const registro of registros) {
+      const data = registro.dataHora.toISOString().split('T')[0];
+      diasTrabalhados.add(data);
+    }
+
+    return diasTrabalhados.size;
+  }
+
+  private calcularDiasUteis(
+    dataInicio: Date,
+    dataFim: Date,
+    usuario: any,
+  ): number {
+    let diasUteis = 0;
+    const data = new Date(dataInicio);
+
+    while (data <= dataFim) {
+      const diaSemana = data.getDay();
+      const horasDia = this.calcularHorasDiaPrevistas(diaSemana, usuario);
+
+      if (horasDia > 0) {
+        diasUteis++;
+      }
+
+      data.setDate(data.getDate() + 1);
+    }
+
+    return diasUteis;
+  }
+
+  private calcularSemanasTrabalhadas(dataInicio: Date, dataFim: Date): number {
+    const diffTime = dataFim.getTime() - dataInicio.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.ceil(diffDays / 7);
+  }
+
+  private async calcularSaldoTotal(
+    usuarioId: string,
+    usuario: any,
+    dataLimite: Date,
+  ): Promise<number> {
+    const dataInicioRegistros = this.parseDateLocal(
+      usuario.informacoesTrabalhistas.inicioRegistros,
+    );
+
+    // Buscar registros desde o início dos registros até o limite
+    const registros = await this.registroPontoRepository.find({
+      where: {
+        usuarioId,
+        dataHora: Between(dataInicioRegistros, dataLimite),
+        status: In([StatusRegistro.APROVADO, StatusRegistro.JUSTIFICADO]),
+      },
+      order: { dataHora: 'ASC' },
     });
 
-    return resultado;
+    // Calcular horas trabalhadas totais
+    const horasTrabalhadasTotal = this.calcularHorasTrabalhadas(registros);
+
+    // Calcular horas previstas totais
+    const horasPrevistasTotal = this.calcularHorasPrevistas(
+      dataInicioRegistros,
+      dataLimite,
+      usuario,
+    );
+
+    return horasTrabalhadasTotal - horasPrevistasTotal;
+  }
+
+  private getDiaSemana(dia: number): string {
+    const dias = [
+      'Domingo',
+      'Segunda',
+      'Terça',
+      'Quarta',
+      'Quinta',
+      'Sexta',
+      'Sábado',
+    ];
+    return dias[dia];
   }
 }
