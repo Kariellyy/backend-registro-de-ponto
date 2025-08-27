@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Repository } from 'typeorm';
+import { Between, In, Repository } from 'typeorm';
 import { Empresa } from '../empresas/entities/empresa.entity';
 import { HorarioEmpresa } from '../empresas/entities/horario-empresa.entity';
 import { HorarioFuncionario } from '../usuarios/entities/horario-funcionario.entity';
@@ -210,7 +210,7 @@ export class PontoService {
       where: {
         usuarioId,
         dataHora: Between(dataInicioCalculo, dataFim),
-        status: StatusRegistro.APROVADO,
+        status: In([StatusRegistro.APROVADO, StatusRegistro.JUSTIFICADO]),
       },
       order: { dataHora: 'ASC' },
     });
@@ -609,7 +609,7 @@ export class PontoService {
       where: {
         usuarioId,
         dataHora: Between(dataInicioRegistros, dataLimite),
-        status: StatusRegistro.APROVADO,
+        status: In([StatusRegistro.APROVADO, StatusRegistro.JUSTIFICADO]),
       },
       order: { dataHora: 'ASC' },
     });
