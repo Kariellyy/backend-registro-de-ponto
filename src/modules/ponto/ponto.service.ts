@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, In, Repository } from 'typeorm';
+import { UserRole } from '../../core/enums/user-role.enum';
 import { UserStatus } from '../../core/enums/user-status.enum';
 import { Empresa } from '../empresas/entities/empresa.entity';
 import { Usuario } from '../usuarios/entities/usuario.entity';
@@ -868,12 +869,35 @@ export class PontoService {
   }
 
   async deletarFalta(faltaId: string, usuarioId: string): Promise<void> {
+    // Buscar a falta pelo ID
     const falta = await this.faltaRepository.findOne({
-      where: { id: faltaId, usuarioId: usuarioId },
+      where: { id: faltaId },
+      relations: ['usuario'],
     });
 
     if (!falta) {
       throw new NotFoundException('Falta não encontrada');
+    }
+
+    // Buscar o usuário que está tentando deletar
+    const usuario = await this.usuarioRepository.findOne({
+      where: { id: usuarioId },
+    });
+
+    if (!usuario) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+
+    // Verificar permissão: usuário pode deletar sua própria falta ou faltas da empresa se for admin
+    const podeDeletar =
+      falta.usuarioId === usuarioId || // Própria falta
+      (usuario.papel === UserRole.ADMINISTRADOR &&
+        falta.usuario.empresaId === usuario.empresaId) || // Admin da mesma empresa
+      (usuario.papel === UserRole.DONO &&
+        falta.usuario.empresaId === usuario.empresaId); // Dono da empresa
+
+    if (!podeDeletar) {
+      throw new BadRequestException('Sem permissão para deletar esta falta');
     }
 
     if (falta.status !== StatusFalta.PENDENTE) {
