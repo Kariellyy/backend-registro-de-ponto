@@ -108,9 +108,12 @@ export class DepartamentosService {
   ): Promise<boolean> {
     const count = await this.usuarioRepository.count({
       where: {
-        departamentoId: id,
         empresaId,
+        informacoesTrabalhistas: {
+          departamentoId: id,
+        },
       },
+      relations: ['informacoesTrabalhistas'],
     });
 
     return count > 0;
