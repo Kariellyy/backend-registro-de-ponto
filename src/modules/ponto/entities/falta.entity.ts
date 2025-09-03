@@ -73,7 +73,7 @@ export class Falta {
   @Column({ name: 'aprovado_por', type: 'uuid', nullable: true })
   aprovadoPor: string | null;
 
-  @Column({ name: 'data_aprovacao', type: 'timestamp', nullable: true })
+  @Column({ name: 'data_aprovacao', type: 'timestamptz', nullable: true })
   dataAprovacao: Date | null;
 
   @ManyToOne(() => Usuario, { onDelete: 'CASCADE' })
@@ -84,9 +84,9 @@ export class Falta {
   @JoinColumn({ name: 'aprovado_por' })
   aprovador: Usuario;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }

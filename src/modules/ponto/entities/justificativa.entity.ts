@@ -55,7 +55,7 @@ export class Justificativa {
   @Column({ name: 'aprovado_por', type: 'uuid', nullable: true })
   aprovadoPor: string;
 
-  @Column({ name: 'data_aprovacao', type: 'timestamp', nullable: true })
+  @Column({ name: 'data_aprovacao', type: 'timestamptz', nullable: true })
   dataAprovacao: Date;
 
   @ManyToOne(() => RegistroPonto, { onDelete: 'CASCADE' })
@@ -66,9 +66,9 @@ export class Justificativa {
   @JoinColumn({ name: 'aprovado_por' })
   aprovador: Usuario;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }

@@ -36,26 +36,42 @@ export class PontoService {
     private pontoValidatorService: PontoValidatorService,
   ) {}
 
-  /**
-   * Método utilitário para criar datas no fuso horário local
-   * Evita problemas de conversão UTC que podem causar diferença de 1 dia
-   */
-  private parseDateLocal(dateInput: string | Date): Date {
-    let date: Date;
+  private startOfDayUTC(d: Date): Date {
+    return new Date(
+      Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0),
+    );
+  }
 
+  private endOfDayUTC(d: Date): Date {
+    return new Date(
+      Date.UTC(
+        d.getUTCFullYear(),
+        d.getUTCMonth(),
+        d.getUTCDate(),
+        23,
+        59,
+        59,
+        999,
+      ),
+    );
+  }
+
+  private parseDateUTC(dateInput: string | Date): Date {
     if (typeof dateInput === 'string') {
       const [year, month, day] = dateInput.split('-').map(Number);
-      date = new Date(year, month - 1, day);
-    } else {
-      // Se já é um Date, criar uma nova data local
-      date = new Date(
-        dateInput.getFullYear(),
-        dateInput.getMonth(),
-        dateInput.getDate(),
-      );
+      return new Date(Date.UTC(year, (month || 1) - 1, day || 1, 0, 0, 0, 0));
     }
-
-    return date;
+    return new Date(
+      Date.UTC(
+        dateInput.getUTCFullYear(),
+        dateInput.getUTCMonth(),
+        dateInput.getUTCDate(),
+        0,
+        0,
+        0,
+        0,
+      ),
+    );
   }
 
   async registrarPonto(
@@ -94,19 +110,8 @@ export class PontoService {
 
     // Validar se já existe registro no mesmo dia
     const hoje = new Date();
-    const inicioDia = new Date(
-      hoje.getFullYear(),
-      hoje.getMonth(),
-      hoje.getDate(),
-    );
-    const fimDia = new Date(
-      hoje.getFullYear(),
-      hoje.getMonth(),
-      hoje.getDate(),
-      23,
-      59,
-      59,
-    );
+    const inicioDia = this.startOfDayUTC(hoje);
+    const fimDia = this.endOfDayUTC(hoje);
 
     const registrosHoje = await this.registroPontoRepository.find({
       where: {
@@ -241,12 +246,12 @@ export class PontoService {
     }
 
     // Definir período de cálculo
-    const dataInicioMes = new Date(ano, mes - 1, 1);
-    const dataFimMes = new Date(ano, mes, 0, 23, 59, 59, 999);
+    const dataInicioMes = new Date(Date.UTC(ano, mes - 1, 1, 0, 0, 0, 0));
+    const dataFimMes = new Date(Date.UTC(ano, mes, 0, 23, 59, 59, 999));
     const hoje = new Date();
 
     // Data de início dos registros (data basal)
-    const dataInicioRegistros = this.parseDateLocal(
+    const dataInicioRegistros = this.parseDateUTC(
       usuario.informacoesTrabalhistas.inicioRegistros,
     );
 
@@ -521,17 +526,17 @@ export class PontoService {
     usuario: any,
   ): number {
     let horasTotal = 0;
-    const data = new Date(dataInicio);
+    const data = this.startOfDayUTC(dataInicio);
 
     while (data <= dataFim) {
-      const diaSemana = data.getDay();
+      const diaSemana = data.getUTCDay();
       const horasDia = this.calcularHorasDiaPrevistas(diaSemana, usuario);
 
       if (horasDia > 0) {
         horasTotal += horasDia;
       }
 
-      data.setDate(data.getDate() + 1);
+      data.setUTCDate(data.getUTCDate() + 1);
     }
 
     return horasTotal;
@@ -609,17 +614,17 @@ export class PontoService {
     usuario: any,
   ): number {
     let diasUteis = 0;
-    const data = new Date(dataInicio);
+    const data = this.startOfDayUTC(dataInicio);
 
     while (data <= dataFim) {
-      const diaSemana = data.getDay();
+      const diaSemana = data.getUTCDay();
       const horasDia = this.calcularHorasDiaPrevistas(diaSemana, usuario);
 
       if (horasDia > 0) {
         diasUteis++;
       }
 
-      data.setDate(data.getDate() + 1);
+      data.setUTCDate(data.getUTCDate() + 1);
     }
 
     return diasUteis;
@@ -636,7 +641,7 @@ export class PontoService {
     usuario: any,
     dataLimite: Date,
   ): Promise<number> {
-    const dataInicioRegistros = this.parseDateLocal(
+    const dataInicioRegistros = this.parseDateUTC(
       usuario.informacoesTrabalhistas.inicioRegistros,
     );
 
@@ -699,7 +704,7 @@ export class PontoService {
       throw new NotFoundException('Usuário não encontrado');
     }
 
-    const data = this.parseDateLocal(registrarFaltaDto.data);
+    const data = this.parseDateUTC(registrarFaltaDto.data);
 
     // Verificar se já existe falta para esta data
     const faltaExistente = await this.faltaRepository.findOne({
@@ -746,8 +751,8 @@ export class PontoService {
       .orderBy('falta.data', 'DESC');
 
     if (dataInicio && dataFim) {
-      const dataInicioDate = this.parseDateLocal(dataInicio);
-      const dataFimDate = this.parseDateLocal(dataFim);
+      const dataInicioDate = this.parseDateUTC(dataInicio);
+      const dataFimDate = this.parseDateUTC(dataFim);
       query.andWhere('falta.data BETWEEN :dataInicio AND :dataFim', {
         dataInicio: dataInicioDate,
         dataFim: dataFimDate,
@@ -774,8 +779,8 @@ export class PontoService {
       .orderBy('falta.data', 'DESC');
 
     if (dataInicio && dataFim) {
-      const dataInicioDate = this.parseDateLocal(dataInicio);
-      const dataFimDate = this.parseDateLocal(dataFim);
+      const dataInicioDate = this.parseDateUTC(dataInicio);
+      const dataFimDate = this.parseDateUTC(dataFim);
       query.andWhere('falta.data BETWEEN :dataInicio AND :dataFim', {
         dataInicio: dataInicioDate,
         dataFim: dataFimDate,
@@ -1034,9 +1039,8 @@ export class PontoService {
     let horasJustificadas = 0;
 
     for (const falta of faltasAprovadas) {
-      // Converter string de data para Date local
-      const dataFalta = this.parseDateLocal(falta.data);
-      const diaSemana = dataFalta.getDay();
+      const dataFalta = this.parseDateUTC(falta.data);
+      const diaSemana = dataFalta.getUTCDay();
 
       // Calcular horas que deveriam ser trabalhadas neste dia
       const horasDiaPrevistas = this.calcularHorasDiaPrevistas(
@@ -1147,10 +1151,7 @@ export class PontoService {
 
     // Se é um objeto Date, formatar
     if (data instanceof Date) {
-      const ano = data.getFullYear();
-      const mes = String(data.getMonth() + 1).padStart(2, '0');
-      const dia = String(data.getDate()).padStart(2, '0');
-      return `${ano}-${mes}-${dia}`;
+      return data.toISOString().slice(0, 10);
     }
 
     // Se é um objeto com propriedades de data (pode acontecer com TypeORM)
@@ -1159,10 +1160,7 @@ export class PontoService {
       try {
         const dateObj = new Date(data);
         if (!isNaN(dateObj.getTime())) {
-          const ano = dateObj.getFullYear();
-          const mes = String(dateObj.getMonth() + 1).padStart(2, '0');
-          const dia = String(dateObj.getDate()).padStart(2, '0');
-          return `${ano}-${mes}-${dia}`;
+          return dateObj.toISOString().slice(0, 10);
         }
       } catch (error) {
         console.error('Erro ao converter data:', error, 'Data recebida:', data);

@@ -27,6 +27,15 @@ export class UsuariosService {
     private readonly horarioFuncionarioRepository: Repository<HorarioFuncionario>,
   ) {}
 
+  private toDateOnlyString(input: string | Date): string {
+    if (!input) return undefined as unknown as string;
+    if (typeof input === 'string') {
+      // assume formato YYYY-MM-DD vindo do front
+      return input.slice(0, 10);
+    }
+    return input.toISOString().slice(0, 10);
+  }
+
   async create(createUsuarioDto: CreateUsuarioDto): Promise<Usuario> {
     // Verificar se email já existe
     const existingUser = await this.usuarioRepository.findOne({
@@ -93,8 +102,10 @@ export class UsuariosService {
           usuarioId: savedUsuario.id,
           cargoId,
           departamentoId,
-          dataAdmissao: new Date(dataAdmissao),
-          inicioRegistros: new Date(inicioRegistros),
+          dataAdmissao: this.toDateOnlyString(dataAdmissao) as unknown as any,
+          inicioRegistros: this.toDateOnlyString(
+            inicioRegistros,
+          ) as unknown as any,
           cargaHorariaSemanal: cargaHorariaSemanal || 40,
           salario: salario || null,
         });
@@ -295,9 +306,11 @@ export class UsuariosService {
         if (departamentoId !== undefined)
           informacoesTrabalhistas.departamentoId = departamentoId;
         if (dataAdmissao !== undefined)
-          informacoesTrabalhistas.dataAdmissao = new Date(dataAdmissao);
+          (informacoesTrabalhistas as any).dataAdmissao =
+            this.toDateOnlyString(dataAdmissao);
         if (inicioRegistros !== undefined)
-          informacoesTrabalhistas.inicioRegistros = new Date(inicioRegistros);
+          (informacoesTrabalhistas as any).inicioRegistros =
+            this.toDateOnlyString(inicioRegistros);
         if (cargaHorariaSemanal !== undefined)
           informacoesTrabalhistas.cargaHorariaSemanal = cargaHorariaSemanal;
         if (salario !== undefined) informacoesTrabalhistas.salario = salario;

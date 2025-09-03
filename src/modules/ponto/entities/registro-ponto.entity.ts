@@ -49,7 +49,7 @@ export class RegistroPonto {
   })
   status: StatusRegistro;
 
-  @Column({ name: 'data_hora', type: 'timestamp', nullable: false })
+  @Column({ name: 'data_hora', type: 'timestamptz', nullable: false })
   dataHora: Date;
 
   // Campos de geolocalização
@@ -107,9 +107,9 @@ export class RegistroPonto {
   )
   justificativas: Justificativa[];
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }
