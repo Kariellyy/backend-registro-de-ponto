@@ -4,15 +4,15 @@ import { Empresa } from '../empresas/entities/empresa.entity';
 import { HorarioEmpresa } from '../empresas/entities/horario-empresa.entity';
 import { HorarioFuncionario } from '../usuarios/entities/horario-funcionario.entity';
 import { Usuario } from '../usuarios/entities/usuario.entity';
+import { FaltaController } from './controllers/falta.controller';
+import { JustificativasController } from './controllers/justificativas.controller';
+import { PontoController } from './controllers/ponto.controller';
 import { Falta } from './entities/falta.entity';
 import { Justificativa } from './entities/justificativa.entity';
 import { RegistroPonto } from './entities/registro-ponto.entity';
-import { FaltaController } from './falta.controller';
-import { JustificativasController } from './justificativas.controller';
-import { JustificativasService } from './justificativas.service';
-import { PontoValidatorService } from './ponto-validator.service';
-import { PontoController } from './ponto.controller';
-import { PontoService } from './ponto.service';
+import { JustificativasService } from './services/justificativas.service';
+import { PontoValidatorService } from './services/ponto-validator.service';
+import { PontoService } from './services/ponto.service';
 
 @Module({
   imports: [

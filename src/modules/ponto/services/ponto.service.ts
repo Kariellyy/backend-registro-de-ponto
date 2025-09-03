@@ -5,22 +5,22 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, In, Repository } from 'typeorm';
-import { UserRole } from '../../core/enums/user-role.enum';
-import { UserStatus } from '../../core/enums/user-status.enum';
-import { Empresa } from '../empresas/entities/empresa.entity';
-import { Usuario } from '../usuarios/entities/usuario.entity';
-import { AprovarFaltaDto, RejeitarFaltaDto } from './dto/aprovar-falta.dto';
-import { FaltaResponseDto } from './dto/falta-response.dto';
-import { RegistrarFaltaDto } from './dto/registrar-falta.dto';
-import { RegistrarPontoDto } from './dto/registrar-ponto.dto';
-import { RegistroPontoResponseDto } from './dto/registro-ponto-response.dto';
-import { Falta, StatusFalta, TipoFalta } from './entities/falta.entity';
+import { UserRole } from '../../../core/enums/user-role.enum';
+import { UserStatus } from '../../../core/enums/user-status.enum';
+import { Empresa } from '../../empresas/entities/empresa.entity';
+import { Usuario } from '../../usuarios/entities/usuario.entity';
+import { AprovarFaltaDto, RejeitarFaltaDto } from '../dto/aprovar-falta.dto';
+import { FaltaResponseDto } from '../dto/falta-response.dto';
+import { RegistrarFaltaDto } from '../dto/registrar-falta.dto';
+import { RegistrarPontoDto } from '../dto/registrar-ponto.dto';
+import { RegistroPontoResponseDto } from '../dto/registro-ponto-response.dto';
+import { Falta, StatusFalta, TipoFalta } from '../entities/falta.entity';
 import {
   RegistroPonto,
   StatusRegistro,
   TipoRegistro,
-} from './entities/registro-ponto.entity';
-import { PontoValidatorService } from './ponto-validator.service';
+} from '../entities/registro-ponto.entity';
+import { PontoValidatorService } from '../services/ponto-validator.service';
 
 @Injectable()
 export class PontoService {

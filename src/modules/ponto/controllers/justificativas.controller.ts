@@ -7,12 +7,12 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { Usuario } from '../usuarios/entities/usuario.entity';
-import { AprovarJustificativaDto } from './dto/aprovar-justificativa.dto';
-import { CriarJustificativaDto } from './dto/criar-justificativa.dto';
-import { JustificativasService } from './justificativas.service';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { Usuario } from '../../usuarios/entities/usuario.entity';
+import { AprovarJustificativaDto } from '../dto/aprovar-justificativa.dto';
+import { CriarJustificativaDto } from '../dto/criar-justificativa.dto';
+import { JustificativasService } from '../services/justificativas.service';
 
 @Controller('justificativas')
 @UseGuards(JwtAuthGuard)

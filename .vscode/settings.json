@@ -1,0 +1,4 @@
+// configuração para atualizar imports ao mover arquivos
+{
+  "typescript.updateImportsOnFileMove.enabled": "always",
+}

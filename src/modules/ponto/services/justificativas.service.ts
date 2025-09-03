@@ -1,17 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { AprovarJustificativaDto } from './dto/aprovar-justificativa.dto';
-import { CriarJustificativaDto } from './dto/criar-justificativa.dto';
-import { RejeitarJustificativaDto } from './dto/rejeitar-justificativa.dto';
+import { AprovarJustificativaDto } from '../dto/aprovar-justificativa.dto';
+import { CriarJustificativaDto } from '../dto/criar-justificativa.dto';
+import { RejeitarJustificativaDto } from '../dto/rejeitar-justificativa.dto';
 import {
   Justificativa,
   StatusJustificativa,
-} from './entities/justificativa.entity';
+} from '../entities/justificativa.entity';
 import {
   RegistroPonto,
   StatusRegistro,
-} from './entities/registro-ponto.entity';
+} from '../entities/registro-ponto.entity';
 
 @Injectable()
 export class JustificativasService {

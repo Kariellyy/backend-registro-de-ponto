@@ -1,11 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
-import { Empresa } from '../empresas/entities/empresa.entity';
-import { HorarioFuncionario } from '../usuarios/entities/horario-funcionario.entity';
-import { Usuario } from '../usuarios/entities/usuario.entity';
-import { Falta, StatusFalta, TipoFalta } from './entities/falta.entity';
-import { RegistroPonto, TipoRegistro } from './entities/registro-ponto.entity';
+import { Empresa } from '../../empresas/entities/empresa.entity';
+import { HorarioFuncionario } from '../../usuarios/entities/horario-funcionario.entity';
+import { Usuario } from '../../usuarios/entities/usuario.entity';
+import { Falta, StatusFalta, TipoFalta } from '../entities/falta.entity';
+import { RegistroPonto, TipoRegistro } from '../entities/registro-ponto.entity';
 
 @Injectable()
 export class PontoValidatorService {

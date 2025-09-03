@@ -9,12 +9,12 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { Usuario } from '../usuarios/entities/usuario.entity';
-import { AprovarFaltaDto, RejeitarFaltaDto } from './dto/aprovar-falta.dto';
-import { RegistrarFaltaDto } from './dto/registrar-falta.dto';
-import { PontoService } from './ponto.service';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { Usuario } from '../../usuarios/entities/usuario.entity';
+import { AprovarFaltaDto, RejeitarFaltaDto } from '../dto/aprovar-falta.dto';
+import { RegistrarFaltaDto } from '../dto/registrar-falta.dto';
+import { PontoService } from '../services/ponto.service';
 
 @Controller('faltas')
 @UseGuards(JwtAuthGuard)
