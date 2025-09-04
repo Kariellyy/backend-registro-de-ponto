@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import { Response } from 'express';
 
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
@@ -54,5 +63,45 @@ export class PontoController {
     }
 
     return this.pontoService.calcularBancoHoras(user.id, mesNum, anoNum);
+  }
+
+  @Get('relatorio-contador')
+  async relatorioContador(
+    @CurrentUser() user: Usuario,
+    @Query('mes') mes: string,
+    @Query('ano') ano: string,
+  ) {
+    const mesNum = parseInt(mes, 10);
+    const anoNum = parseInt(ano, 10);
+    if (isNaN(mesNum) || isNaN(anoNum)) {
+      throw new Error('Mês e ano devem ser números válidos');
+    }
+    return this.pontoService.calcularRelatorioContador(
+      user.empresaId,
+      mesNum,
+      anoNum,
+    );
+  }
+
+  @Get('relatorio-contador/pdf')
+  async relatorioContadorPdf(
+    @CurrentUser() user: Usuario,
+    @Query('mes') mes: string,
+    @Query('ano') ano: string,
+    @Res() res: Response,
+  ) {
+    const mesNum = parseInt(mes, 10);
+    const anoNum = parseInt(ano, 10);
+    if (isNaN(mesNum) || isNaN(anoNum)) {
+      throw new Error('Mês e ano devem ser números válidos');
+    }
+    const { headers, buffer } =
+      await this.pontoService.gerarRelatorioContadorPdf(
+        user.empresaId,
+        mesNum,
+        anoNum,
+      );
+    res.set(headers);
+    res.send(buffer);
   }
 }

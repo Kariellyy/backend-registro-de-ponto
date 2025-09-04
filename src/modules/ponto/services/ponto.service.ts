@@ -21,6 +21,8 @@ import {
   TipoRegistro,
 } from '../entities/registro-ponto.entity';
 import { PontoValidatorService } from '../services/ponto-validator.service';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const PDFDocument = require('pdfkit');
 
 @Injectable()
 export class PontoService {
@@ -320,10 +322,22 @@ export class PontoService {
     const saldoMes = horasTrabalhadas + horasJustificadas - horasPrevistas;
 
     // Calcular saldo total (todos os meses anteriores)
+    // Saldo acumulado até o dia anterior ao início do período, para evitar dupla contagem
+    const limiteAnterior = new Date(
+      Date.UTC(
+        dataInicioCalculo.getUTCFullYear(),
+        dataInicioCalculo.getUTCMonth(),
+        dataInicioCalculo.getUTCDate() - 1,
+        23,
+        59,
+        59,
+        999,
+      ),
+    );
     const saldoTotal = await this.calcularSaldoTotal(
       usuarioId,
       usuario,
-      dataInicioCalculo,
+      limiteAnterior,
     );
 
     return {
@@ -338,6 +352,183 @@ export class PontoService {
       semanasTrabalhadas,
       dataCalculoAte: dataFimCalculo,
     };
+  }
+
+  async calcularRelatorioContador(
+    empresaId: string,
+    mes: number,
+    ano: number,
+  ): Promise<{
+    resumo: {
+      totalFuncionarios: number;
+      horasRegulares: number;
+      horasExtras: number;
+      horasDebito: number;
+      saldoBancoHoras: number;
+    };
+    funcionarios: Array<{
+      id: string;
+      nome: string;
+      horasRegulares: number;
+      horasExtras: number;
+      horasDebito: number;
+      saldoMes: number;
+      saldoAcumulado: number;
+    }>;
+  }> {
+    const funcionarios = await this.usuarioRepository.find({
+      where: { empresaId, papel: In(['administrador', 'funcionario'] as any) },
+      relations: ['informacoesTrabalhistas', 'empresa', 'horarios'],
+      select: ['id', 'nome', 'email', 'empresaId', 'createdAt', 'updatedAt'],
+      order: { nome: 'ASC' },
+    });
+
+    let horasRegularesTotal = 0;
+    let horasExtrasTotal = 0;
+    let horasDebitoTotal = 0;
+    let saldoBancoHorasTotal = 0;
+
+    const detalhes = [] as Array<{
+      id: string;
+      nome: string;
+      horasRegulares: number;
+      horasExtras: number;
+      horasDebito: number;
+      saldoMes: number;
+      saldoAcumulado: number;
+    }>;
+
+    for (const func of funcionarios) {
+      try {
+        const dados = await this.calcularBancoHoras(func.id, mes, ano);
+        const trabalhado = dados.horasTrabalhadas; // horas
+        const previsto = dados.horasPrevistas; // horas
+        const justificadas = dados.horasJustificadas; // horas
+        const efetivo = trabalhado + justificadas;
+
+        const horasExtras = Math.max(0, efetivo - previsto);
+        const horasDebito = Math.max(0, previsto - efetivo);
+        const horasRegulares = Math.max(0, Math.min(efetivo, previsto));
+
+        const saldoMes = dados.saldoMes; // horas
+        const saldoAcumulado = dados.saldoTotal; // horas (já inclui mes atual somado)
+
+        detalhes.push({
+          id: func.id,
+          nome: func.nome,
+          horasRegulares,
+          horasExtras,
+          horasDebito,
+          saldoMes,
+          saldoAcumulado,
+        });
+
+        horasRegularesTotal += horasRegulares;
+        horasExtrasTotal += horasExtras;
+        horasDebitoTotal += horasDebito;
+        saldoBancoHorasTotal += saldoAcumulado;
+      } catch (_) {
+        // Se cálculo falhar para um funcionário, ignora e segue
+      }
+    }
+
+    return {
+      resumo: {
+        totalFuncionarios: funcionarios.length,
+        horasRegulares: Math.round(horasRegularesTotal * 100) / 100,
+        horasExtras: Math.round(horasExtrasTotal * 100) / 100,
+        horasDebito: Math.round(horasDebitoTotal * 100) / 100,
+        saldoBancoHoras: Math.round(saldoBancoHorasTotal * 100) / 100,
+      },
+      funcionarios: detalhes,
+    };
+  }
+
+  async gerarRelatorioContadorPdf(
+    empresaId: string,
+    mes: number,
+    ano: number,
+  ): Promise<any> {
+    const dados = await this.calcularRelatorioContador(empresaId, mes, ano);
+    const doc = new PDFDocument({ size: 'A4', margin: 36 });
+
+    const chunks: Buffer[] = [];
+    return await new Promise((resolve) => {
+      doc.on('data', (chunk) => chunks.push(chunk as Buffer));
+      doc.on('end', () =>
+        resolve({
+          headers: {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `inline; filename=relatorio-contador-${ano}-${String(mes).padStart(2, '0')}.pdf`,
+          },
+          buffer: Buffer.concat(chunks),
+        }),
+      );
+
+      doc.fontSize(16).text('Relatório para Contador', { align: 'center' });
+      doc.moveDown(0.5);
+      doc.fontSize(10).text(`Período: ${String(mes).padStart(2, '0')}/${ano}`, {
+        align: 'center',
+      });
+      doc.moveDown(1);
+
+      // Resumo
+      const r = dados.resumo;
+      doc.fontSize(12).text(`Funcionários: ${r.totalFuncionarios}`);
+      doc.text(`Horas Regulares: ${r.horasRegulares}h`);
+      doc.text(`Horas Extras: ${r.horasExtras}h`);
+      doc.text(`Horas Débito: ${r.horasDebito}h`);
+      doc.text(`Saldo Banco Horas: ${r.saldoBancoHoras}h`);
+      doc.moveDown(1);
+
+      // Tabela simples
+      doc.fontSize(12).text('Funcionários');
+      doc.moveDown(0.5);
+      const headers = [
+        'Nome',
+        'Regulares',
+        'Extras',
+        'Débito',
+        'Saldo Mês',
+        'Saldo Acum.',
+      ];
+      const widths = [160, 70, 60, 60, 70, 80];
+      const startX = doc.x;
+      const startY = doc.y;
+      doc.fontSize(10);
+      headers.forEach((h, i) => {
+        doc.text(
+          h,
+          startX + widths.slice(0, i).reduce((a, b) => a + b, 0),
+          startY,
+          { width: widths[i] },
+        );
+      });
+      doc.moveDown(1);
+
+      dados.funcionarios.forEach((f) => {
+        const row = [
+          f.nome,
+          `${f.horasRegulares}h`,
+          `${f.horasExtras}h`,
+          `${f.horasDebito}h`,
+          `${f.saldoMes}h`,
+          `${f.saldoAcumulado}h`,
+        ];
+        const y = doc.y;
+        row.forEach((v, i) => {
+          doc.text(
+            String(v),
+            startX + widths.slice(0, i).reduce((a, b) => a + b, 0),
+            y,
+            { width: widths[i] },
+          );
+        });
+        doc.moveDown(0.5);
+      });
+
+      doc.end();
+    });
   }
 
   private validarSequenciaRegistros(
