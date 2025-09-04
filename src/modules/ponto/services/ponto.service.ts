@@ -95,8 +95,10 @@ export class PontoService {
       new Date(),
     );
 
+    let exigeJustificativa = Boolean((validacao as any).exigeJustificativa);
     if (!validacao.podeRegistrar) {
-      throw new BadRequestException(validacao.motivo);
+      // Não bloquear: converter em exigência de justificativa
+      exigeJustificativa = true;
     }
 
     // Buscar empresa
@@ -146,6 +148,9 @@ export class PontoService {
         // Se não exige justificativa, aprova automaticamente
         status = StatusRegistro.APROVADO;
       }
+    }
+    if (exigeJustificativa) {
+      status = StatusRegistro.PENDENTE;
     }
 
     // Criar registro

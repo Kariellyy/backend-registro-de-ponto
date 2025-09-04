@@ -24,7 +24,12 @@ export class PontoValidatorService {
     usuario: Usuario,
     tipo: TipoRegistro,
     dataHora: Date,
-  ): Promise<{ podeRegistrar: boolean; motivo?: string; falta?: Falta }> {
+  ): Promise<{
+    podeRegistrar: boolean;
+    motivo?: string;
+    falta?: Falta;
+    exigeJustificativa?: boolean;
+  }> {
     const data = new Date(dataHora);
     const diaSemana = data.getDay();
     const hora = data.getHours();
@@ -100,7 +105,7 @@ export class PontoValidatorService {
     horario: HorarioFuncionario,
     empresa: Empresa,
     data: Date,
-  ): { podeRegistrar: boolean; motivo?: string } {
+  ): { podeRegistrar: boolean; motivo?: string; exigeJustificativa?: boolean } {
     if (!horario.horarioInicio) {
       return {
         podeRegistrar: false,
@@ -120,8 +125,9 @@ export class PontoValidatorService {
     // Permitir entrada até X minutos após o horário de início
     if (minutosAtual > minutosInicio + empresa.toleranciaEntrada) {
       return {
-        podeRegistrar: false,
-        motivo: `Entrada permitida até ${empresa.toleranciaEntrada} minutos após ${horario.horarioInicio}`,
+        podeRegistrar: true,
+        motivo: `Entrada fora do horário (tolerância ${empresa.toleranciaEntrada} min após ${horario.horarioInicio})`,
+        exigeJustificativa: true,
       };
     }
 
@@ -133,7 +139,7 @@ export class PontoValidatorService {
     horario: HorarioFuncionario,
     empresa: Empresa,
     data: Date,
-  ): { podeRegistrar: boolean; motivo?: string } {
+  ): { podeRegistrar: boolean; motivo?: string; exigeJustificativa?: boolean } {
     if (!horario.horarioFim) {
       return { podeRegistrar: false, motivo: 'Horário de fim não configurado' };
     }
@@ -148,8 +154,9 @@ export class PontoValidatorService {
     // Permitir saída até X minutos antes do horário de fim
     if (minutosAtual < minutosFim - empresa.toleranciaSaida) {
       return {
-        podeRegistrar: false,
-        motivo: `Saída permitida a partir de ${empresa.toleranciaSaida} minutos antes de ${horario.horarioFim}`,
+        podeRegistrar: true,
+        motivo: `Saída fora do horário (tolerância ${empresa.toleranciaSaida} min antes de ${horario.horarioFim})`,
+        exigeJustificativa: true,
       };
     }
 
